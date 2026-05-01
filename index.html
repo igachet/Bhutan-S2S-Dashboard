@@ -1,117 +1,255 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Label,
-  LineChart, Line, ComposedChart, Scatter, ErrorBar, Text, LabelList
-} from 'recharts';
-import { 
-  BarChart2, PieChart, Landmark, Globe, Users, GraduationCap, Activity, Target
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bhutan S2S Imputation Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #002B49;
+    --secondary: #708090;
+    --mahal: #D62828;
+    --euclid: #8338EC;
+    --canberra: #06D6A0;
+    --imputed: #D62828;
+    --grid: #F1F3F5;
+    --bg: #FDFDFD;
+    --border: #CED4DA;
+    --text: #1e293b;
+    --muted: #64748b;
+    --light: #f8fafc;
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+  
+  /* SIDEBAR */
+  aside {
+    width: 280px; min-width: 280px; background: var(--primary); color: white;
+    display: flex; flex-direction: column; padding: 2rem 1.5rem;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.15); position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .brand { border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .brand h1 { font-size: 1.25rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
+  .brand span { font-size: 0.75rem; color: rgba(255,255,255,0.5); font-weight: 400; }
+  nav { display: flex; flex-direction: column; gap: 0.35rem; }
+  nav button {
+    background: none; border: none; color: rgba(255,255,255,0.55); text-align: left;
+    padding: 0.75rem 1rem; font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 700; cursor: pointer; border-radius: 3px; transition: all 0.2s; font-family: inherit;
+  }
+  nav button:hover { background: rgba(255,255,255,0.06); color: white; }
+  nav button.active { background: white; color: var(--primary); font-weight: 800; }
 
-// --- INSTITUTIONAL DATA STRUCTURES ---
+  /* MAIN */
+  main { flex: 1; overflow-y: auto; }
+  header { padding: 2.5rem 3.5rem 2rem; border-bottom: 1px solid var(--border); }
+  header h2 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; text-transform: uppercase; }
+  .content { padding: 2.5rem 3.5rem; max-width: 1300px; }
 
+  /* TABS */
+  .tab-view { display: none; }
+  .tab-view.active { display: block; }
+
+  /* CONTROLS */
+  .controls-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 0.5rem; min-width: 160px; }
+  .ctrl-group label { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: var(--muted); }
+  .ctrl-group .ctrl-btns { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; background: white; }
+  .ctrl-btns button {
+    background: none; border: none; border-bottom: 1px solid #f1f3f5; padding: 0.6rem 1rem;
+    text-align: left; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .ctrl-btns button:last-child { border-bottom: none; }
+  .ctrl-btns button:hover { background: #f8fafc; }
+  .ctrl-btns button.active { background: var(--primary); color: white; }
+
+  /* TOGGLE PILLS */
+  .toggle-pills { display: flex; background: #f1f3f5; border: 1px solid var(--border); border-radius: 3px; padding: 3px; margin-bottom: 1.5rem; max-width: 480px; }
+  .toggle-pills button {
+    flex: 1; background: none; border: none; padding: 0.6rem 0.5rem;
+    font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--muted); cursor: pointer; border-radius: 2px; font-family: inherit; transition: all 0.2s;
+  }
+  .toggle-pills button.active { background: white; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+
+  /* CHART CARD */
+  .chart-card { background: white; border: 1px solid var(--border); padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .chart-wrap { position: relative; }
+
+  /* LEGEND */
+  .legend { display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 0; }
+
+  /* TABLE */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; border: 1px solid var(--border); background: white; }
+  .data-table th { background: #f8fafc; padding: 0.75rem 1rem; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #f1f5f9; color: var(--muted); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: #f8fafc; }
+  .data-table .mono { font-family: 'Courier New', monospace; font-weight: 700; color: var(--text); font-size: 0.68rem; }
+  .data-table .label { font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; }
+  th.sep { border-left: 1px solid var(--border); }
+  td.sep { border-left: 1px solid #f1f5f9; }
+
+  /* METRIC PILLS */
+  .metric-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.5rem; }
+  .metric-pill {
+    background: none; border: 1px solid var(--border); padding: 0.35rem 0.9rem;
+    font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); cursor: pointer; font-family: inherit; border-radius: 2px; transition: all 0.2s;
+  }
+  .metric-pill.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+  /* COMPARE CONTROLS */
+  .compare-controls { display: flex; justify-content: flex-end; margin-bottom: 1rem; gap: 0.75rem; align-items: center; }
+  .view-toggle { display: flex; border: 1px solid var(--border); background: white; border-radius: 3px; overflow: hidden; }
+  .view-toggle button { background: none; border: none; border-right: 1px solid var(--border); padding: 0.5rem 0.75rem; cursor: pointer; color: var(--muted); font-size: 0.7rem; font-family: inherit; transition: all 0.2s; }
+  .view-toggle button:last-child { border-right: none; }
+  .view-toggle button.active { background: var(--primary); color: white; }
+  .view-select { border: 1px solid var(--border); border-radius: 3px; padding: 0.45rem 0.75rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); background: white; cursor: pointer; font-family: inherit; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .charts-grid.single { grid-template-columns: 1fr; }
+  .chart-sub-label { text-align: center; font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: var(--muted); margin-bottom: 0.75rem; }
+
+  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); padding-bottom: 2rem; }
+  footer span { font-size: 0.65rem; color: #cbd5e1; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="brand">
+    <h1>BHUTAN</h1>
+    <span>S2S Imputation</span>
+  </div>
+  <nav id="sidebar-nav">
+    <button class="active" data-tab="consumption">Welfare Distribution</button>
+    <button data-tab="demographics">Household Characteristics</button>
+    <button data-tab="education">Education Profiles</button>
+    <button data-tab="welfare">Welfare Outcomes</button>
+    <button data-tab="density">Density / ECDF</button>
+    <button data-tab="accuracy">Predictive Accuracy</button>
+    <button data-tab="quito">Poverty/Inequality Trends</button>
+  </nav>
+</aside>
+
+<main>
+  <header>
+    <h2 id="page-title">Welfare Distribution</h2>
+  </header>
+  <div class="content">
+
+    <!-- WELFARE DISTRIBUTION -->
+    <div id="tab-consumption" class="tab-view active">
+      <div class="controls-row">
+        <div class="ctrl-group">
+          <label>Ranking Base</label>
+          <div class="ctrl-btns" id="dataset-btns">
+            <button class="active" data-val="consumption">Consumption</button>
+            <button data-val="income">Labor Income</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <label>Aggregation</label>
+          <div class="ctrl-btns" id="group-btns">
+            <button class="active" data-val="quintiles">Quintiles</button>
+            <button data-val="deciles">Deciles</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <label>Outcome Indicator</label>
+          <div class="ctrl-btns" id="metric-btns">
+            <button class="active" data-val="share">Food Share</button>
+            <button data-val="pc">Per Capita Consumption</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="welfareChart" height="320"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--secondary)"></div>LFS 2022 (Imputed)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEMOGRAPHICS -->
+    <div id="tab-demographics" class="tab-view">
+      <div id="demo-content"></div>
+    </div>
+
+    <!-- EDUCATION -->
+    <div id="tab-education" class="tab-view">
+      <div class="toggle-pills" style="margin-bottom:1.5rem;">
+        <button class="active" id="edu-years-btn" onclick="setEduTab('years')">Years of Education</button>
+        <button id="edu-level-btn" onclick="setEduTab('level')">Education Level</button>
+      </div>
+      <div id="edu-content"></div>
+    </div>
+
+    <!-- WELFARE OUTCOMES -->
+    <div id="tab-welfare" class="tab-view">
+      <div id="welfare-content"></div>
+    </div>
+
+    <!-- DENSITY / ECDF -->
+    <div id="tab-density" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="density-btn" onclick="setDensityTab('density')">Density Distribution</button>
+        <button id="ecdf-btn" onclick="setDensityTab('ecdf')">ECDF Curve</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="densityChart" height="340"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--secondary)"></div>LFS 2022 (Imputed)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCURACY -->
+    <div id="tab-accuracy" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="acc-poverty-btn" onclick="setAccuracyTab('poverty')">Poverty Rate</button>
+        <button id="acc-gini-btn" onclick="setAccuracyTab('inequality')">Inequality (Gini)</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="accuracyChart" height="380"></canvas></div>
+      </div>
+    </div>
+
+    <!-- QUITO TRENDS -->
+    <div id="tab-quito" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="quito-poor-btn" onclick="setQuitoTab('poor')">Poverty Trend</button>
+        <button id="quito-gini-btn" onclick="setQuitoTab('gini')">Inequality Trend</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="quitoChart" height="340"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--imputed)"></div>Imputed</div>
+        </div>
+      </div>
+      <div id="quito-table"></div>
+    </div>
+
+    <footer><span>&#9632; Bhutan S2S Imputation Dashboard</span></footer>
+  </div>
+</main>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
 const COLORS = {
-  sidebar: '#002B49', 
-  primary: '#002B49', 
-  secondary: '#708090', 
-  blss: '#002B49',
-  lfs: '#708090',
-  grid: '#F1F3F5',
-  bg: '#FBFBFB',
-  border: '#CED4DA',
-  // Accuracy Specific Colors
-  mahal: '#D62828',    
-  euclid: '#8338EC',   
-  canberra: '#06D6A0', 
-  imputedRed: '#D62828', 
+  primary: '#002B49', secondary: '#708090',
+  mahal: '#D62828', euclid: '#8338EC', canberra: '#06D6A0', imputed: '#D62828'
 };
-
-// --- DATA PROCESSING HELPER ---
-const processAccuracyData = (data, isTrend = false) => data.map((d, index) => ({
-  ...d,
-  low: d.error[0],
-  high: d.error[1],
-  relError: [d.estimate - d.error[0], d.error[1] - d.estimate],
-  // trendValue is null for the first point (2022) to ensure line starts from index 1 (2022 imputed)
-  trendValue: (isTrend && index === 0) ? null : d.estimate
-}));
-
-// Predictive Accuracy Data
-const povertyAccuracyDataRaw = [
-  { name: '2022 BLSS', estimate: 12.38, error: [11.58, 13.17], color: COLORS.sidebar, shape: 'circle' },
-  { name: '2022 Mahalanobis', estimate: 12.08, error: [11.25, 12.91], color: COLORS.mahal, shape: 'circle' },
-  { name: '2022 Mahalanobis Adj', estimate: 11.00, error: [10.18, 11.82], color: COLORS.mahal, shape: 'circle' },
-  { name: '2025 Euclidean', estimate: 8.78, error: [8.06, 9.50], color: COLORS.euclid, shape: 'diamond' },
-  { name: '2025 Euclidean Adj', estimate: 14.48, error: [13.59, 15.36], color: COLORS.euclid, shape: 'diamond' },
-  { name: '2022 Canberra', estimate: 10.66, error: [9.83, 11.49], color: COLORS.canberra, shape: 'triangle' },
-  { name: '2022 Canberra Adj', estimate: 10.60, error: [9.70, 11.40], color: COLORS.canberra, shape: 'triangle' },
-];
-
-const inequalityAccuracyDataRaw = [
-  { name: '2022 BLSS', estimate: 28.47, error: [27.83, 29.11], color: COLORS.sidebar, shape: 'circle' },
-  { name: '2022 Mahalanobis', estimate: 39.58, error: [36.81, 42.36], color: COLORS.mahal, shape: 'circle' },
-  { name: '2022 Mahalanobis Adj', estimate: 29.71, error: [29.15, 30.26], color: COLORS.mahal, shape: 'circle' },
-  { name: '2025 Euclidean', estimate: 29.10, error: [28.45, 29.75], color: COLORS.euclid, shape: 'diamond' },
-  { name: '2025 Euclidean Adj', estimate: 38.61, error: [37.74, 39.48], color: COLORS.euclid, shape: 'diamond' },
-  { name: '2022 Canberra', estimate: 28.92, error: [28.34, 29.50], color: COLORS.canberra, shape: 'triangle' },
-  { name: '2022 Canberra Adj', estimate: 32.10, error: [31.05, 33.15], color: COLORS.canberra, shape: 'triangle' },
-];
-
-const povertyAccuracyData = processAccuracyData(povertyAccuracyDataRaw);
-const inequalityAccuracyData = processAccuracyData(inequalityAccuracyDataRaw);
-
-// Quito Category Data - TRENDS
-const quitoPoorDataRaw = [
-  { name: '2022', estimate: 12.37, error: [11.58, 13.16], color: COLORS.primary, shape: 'circle' },
-  { name: '2022 imputed', estimate: 11.08, error: [10.26, 11.91], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2023 imputed', estimate: 10.04, error: [8.60, 11.48], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2024 imputed', estimate: 9.67, error: [8.95, 10.39], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2025 imputed', estimate: 8.95, error: [8.23, 9.66], color: COLORS.imputedRed, shape: 'diamond' },
-];
-
-const quitoGinDataRaw = [
-  { name: '2022', estimate: 28.46, error: [27.82, 29.10], color: COLORS.primary, shape: 'circle' },
-  { name: '2022 imputed', estimate: 29.70, error: [29.15, 30.26], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2023 imputed', estimate: 30.24, error: [29.22, 31.25], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2024 imputed', estimate: 30.45, error: [29.80, 31.09], color: COLORS.imputedRed, shape: 'diamond' },
-  { name: '2025 imputed', estimate: 30.39, error: [29.86, 30.92], color: COLORS.imputedRed, shape: 'diamond' },
-];
-
-const quitoPoorData = processAccuracyData(quitoPoorDataRaw, true);
-const quitoGinData = processAccuracyData(quitoGinDataRaw, true);
-
-const densityData = [
-  { log_welfare: 7.2, blss: 0.0001, lfs: 0.0002 },
-  { log_welfare: 7.5, blss: 0.0012, lfs: 0.0018 },
-  { log_welfare: 7.8, blss: 0.0080, lfs: 0.0110 },
-  { log_welfare: 8.1, blss: 0.0350, lfs: 0.0420 },
-  { log_welfare: 8.4, blss: 0.1100, lfs: 0.1250 },
-  { log_welfare: 8.7, blss: 0.2800, lfs: 0.3100 },
-  { log_welfare: 9.0, blss: 0.5200, lfs: 0.5500 },
-  { log_welfare: 9.3, blss: 0.7800, lfs: 0.8100 },
-  { log_welfare: 9.6, blss: 0.8900, lfs: 0.8600 },
-  { log_welfare: 9.9, blss: 0.8100, lfs: 0.7400 },
-  { log_welfare: 10.2, blss: 0.5600, lfs: 0.5100 },
-  { log_welfare: 10.5, blss: 0.3200, lfs: 0.2900 },
-  { log_welfare: 10.8, blss: 0.1400, lfs: 0.1300 },
-  { log_welfare: 11.1, blss: 0.0450, lfs: 0.0520 },
-  { log_welfare: 11.4, blss: 0.0120, lfs: 0.0180 },
-  { log_welfare: 11.7, blss: 0.0020, lfs: 0.0040 },
-  { log_welfare: 12.0, blss: 0.0002, lfs: 0.0005 },
-];
-
-const ecdfData = [
-  { log_welfare: 7.5, blss: 0.001, lfs: 0.002 },
-  { log_welfare: 8.0, blss: 0.015, lfs: 0.020 },
-  { log_welfare: 8.5, blss: 0.080, lfs: 0.095 },
-  { log_welfare: 9.0, blss: 0.240, lfs: 0.260 },
-  { log_welfare: 9.5, blss: 0.510, lfs: 0.530 },
-  { log_welfare: 10.0, blss: 0.760, lfs: 0.740 },
-  { log_welfare: 10.5, blss: 0.910, lfs: 0.890 },
-  { log_welfare: 11.0, blss: 0.975, lfs: 0.970 },
-  { log_welfare: 11.5, blss: 0.995, lfs: 0.992 },
-  { log_welfare: 12.0, blss: 1.000, lfs: 1.000 },
-];
 
 const dataDistributions = {
   consumption: {
@@ -159,20 +297,20 @@ const dataDistributions = {
 };
 
 const dataDemographics = {
-  metrics: ['HH size', 'HH members aged 0-14 years', 'HH members aged 15-64 years', 'HH members aged 65 plus years', 'HH sex ratio male to female'],
+  metrics: ['HH size', 'HH members 0-14 years', 'HH members 15-64 years', 'HH members 65+ years', 'HH sex ratio M/F'],
   poor: [
     { metric: 'HH size', BLSS: 6.3, LFS: 6.1 },
-    { metric: 'HH members aged 0-14 years', BLSS: 1.9, LFS: 2.0 },
-    { metric: 'HH members aged 15-64 years', BLSS: 3.8, LFS: 3.5 },
-    { metric: 'HH members aged 65 plus years', BLSS: 0.6, LFS: 0.6 },
-    { metric: 'HH sex ratio male to female', BLSS: 1.2, LFS: 1.2 },
+    { metric: 'HH members 0-14 years', BLSS: 1.9, LFS: 2.0 },
+    { metric: 'HH members 15-64 years', BLSS: 3.8, LFS: 3.5 },
+    { metric: 'HH members 65+ years', BLSS: 0.6, LFS: 0.6 },
+    { metric: 'HH sex ratio M/F', BLSS: 1.2, LFS: 1.2 },
   ],
   nonPoor: [
     { metric: 'HH size', BLSS: 4.6, LFS: 4.5 },
-    { metric: 'HH members aged 0-14 years', BLSS: 1.2, LFS: 1.2 },
-    { metric: 'HH members aged 15-64 years', BLSS: 3.0, LFS: 3.0 },
-    { metric: 'HH members aged 65 plus years', BLSS: 0.3, LFS: 0.3 },
-    { metric: 'HH sex ratio male to female', BLSS: 1.2, LFS: 1.2 },
+    { metric: 'HH members 0-14 years', BLSS: 1.2, LFS: 1.2 },
+    { metric: 'HH members 15-64 years', BLSS: 3.0, LFS: 3.0 },
+    { metric: 'HH members 65+ years', BLSS: 0.3, LFS: 0.3 },
+    { metric: 'HH sex ratio M/F', BLSS: 1.2, LFS: 1.2 },
   ]
 };
 
@@ -192,7 +330,7 @@ const dataEducationYears = {
   ]
 };
 
-const dataEducationLevelHead = {
+const dataEducationLevel = {
   metrics: ['No education', 'Primary incomplete', 'Primary complete', 'Secondary incomplete', 'Secondary complete', 'Tertiary'],
   poor: [
     { metric: 'No education', BLSS: 0.777, LFS: 0.686 },
@@ -226,492 +364,522 @@ const dataWelfare = {
   ]
 };
 
-// --- SHARED COMPONENTS ---
+const densityData = [
+  { x: 7.2, blss: 0.0001, lfs: 0.0002 }, { x: 7.5, blss: 0.0012, lfs: 0.0018 },
+  { x: 7.8, blss: 0.0080, lfs: 0.0110 }, { x: 8.1, blss: 0.0350, lfs: 0.0420 },
+  { x: 8.4, blss: 0.1100, lfs: 0.1250 }, { x: 8.7, blss: 0.2800, lfs: 0.3100 },
+  { x: 9.0, blss: 0.5200, lfs: 0.5500 }, { x: 9.3, blss: 0.7800, lfs: 0.8100 },
+  { x: 9.6, blss: 0.8900, lfs: 0.8600 }, { x: 9.9, blss: 0.8100, lfs: 0.7400 },
+  { x: 10.2, blss: 0.5600, lfs: 0.5100 }, { x: 10.5, blss: 0.3200, lfs: 0.2900 },
+  { x: 10.8, blss: 0.1400, lfs: 0.1300 }, { x: 11.1, blss: 0.0450, lfs: 0.0520 },
+  { x: 11.4, blss: 0.0120, lfs: 0.0180 }, { x: 11.7, blss: 0.0020, lfs: 0.0040 },
+  { x: 12.0, blss: 0.0002, lfs: 0.0005 },
+];
 
-const ComparisonSection = ({ data, formatValue }) => {
-  const [selectedMetrics, setSelectedMetrics] = useState(data.metrics);
-  const [chartType, setChartType] = useState('bar');
-  const [povertyView, setPovertyView] = useState('both');
+const ecdfData = [
+  { x: 7.5, blss: 0.001, lfs: 0.002 }, { x: 8.0, blss: 0.015, lfs: 0.020 },
+  { x: 8.5, blss: 0.080, lfs: 0.095 }, { x: 9.0, blss: 0.240, lfs: 0.260 },
+  { x: 9.5, blss: 0.510, lfs: 0.530 }, { x: 10.0, blss: 0.760, lfs: 0.740 },
+  { x: 10.5, blss: 0.910, lfs: 0.890 }, { x: 11.0, blss: 0.975, lfs: 0.970 },
+  { x: 11.5, blss: 0.995, lfs: 0.992 }, { x: 12.0, blss: 1.000, lfs: 1.000 },
+];
 
-  const toggleMetric = (metric) => {
-    if (selectedMetrics.includes(metric)) {
-      if (selectedMetrics.length > 1) setSelectedMetrics(selectedMetrics.filter(m => m !== metric));
-    } else {
-      setSelectedMetrics([...selectedMetrics, metric]);
+const povertyAccuracyData = [
+  { name: '2022 BLSS', estimate: 12.38, low: 11.58, high: 13.17, color: COLORS.primary },
+  { name: '2022 Mahalanobis', estimate: 12.08, low: 11.25, high: 12.91, color: COLORS.mahal },
+  { name: '2022 Mahal Adj', estimate: 11.00, low: 10.18, high: 11.82, color: COLORS.mahal },
+  { name: '2025 Euclidean', estimate: 8.78, low: 8.06, high: 9.50, color: COLORS.euclid },
+  { name: '2025 Euclid Adj', estimate: 14.48, low: 13.59, high: 15.36, color: COLORS.euclid },
+  { name: '2022 Canberra', estimate: 10.66, low: 9.83, high: 11.49, color: COLORS.canberra },
+  { name: '2022 Canberra Adj', estimate: 10.60, low: 9.70, high: 11.40, color: COLORS.canberra },
+];
+
+const inequalityAccuracyData = [
+  { name: '2022 BLSS', estimate: 28.47, low: 27.83, high: 29.11, color: COLORS.primary },
+  { name: '2022 Mahalanobis', estimate: 39.58, low: 36.81, high: 42.36, color: COLORS.mahal },
+  { name: '2022 Mahal Adj', estimate: 29.71, low: 29.15, high: 30.26, color: COLORS.mahal },
+  { name: '2025 Euclidean', estimate: 29.10, low: 28.45, high: 29.75, color: COLORS.euclid },
+  { name: '2025 Euclid Adj', estimate: 38.61, low: 37.74, high: 39.48, color: COLORS.euclid },
+  { name: '2022 Canberra', estimate: 28.92, low: 28.34, high: 29.50, color: COLORS.canberra },
+  { name: '2022 Canberra Adj', estimate: 32.10, low: 31.05, high: 33.15, color: COLORS.canberra },
+];
+
+const quitoPoorData = [
+  { name: '2022', estimate: 12.37, low: 11.58, high: 13.16, color: COLORS.primary },
+  { name: '2022 imputed', estimate: 11.08, low: 10.26, high: 11.91, color: COLORS.imputed },
+  { name: '2023 imputed', estimate: 10.04, low: 8.60, high: 11.48, color: COLORS.imputed },
+  { name: '2024 imputed', estimate: 9.67, low: 8.95, high: 10.39, color: COLORS.imputed },
+  { name: '2025 imputed', estimate: 8.95, low: 8.23, high: 9.66, color: COLORS.imputed },
+];
+
+const quitoGinData = [
+  { name: '2022', estimate: 28.46, low: 27.82, high: 29.10, color: COLORS.primary },
+  { name: '2022 imputed', estimate: 29.70, low: 29.15, high: 30.26, color: COLORS.imputed },
+  { name: '2023 imputed', estimate: 30.24, low: 29.22, high: 31.25, color: COLORS.imputed },
+  { name: '2024 imputed', estimate: 30.45, low: 29.80, high: 31.09, color: COLORS.imputed },
+  { name: '2025 imputed', estimate: 30.39, low: 29.86, high: 30.92, color: COLORS.imputed },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let welfareDataset = 'consumption', welfareGroup = 'quintiles', welfareMetric = 'share';
+let densityTab = 'density', accuracyTab = 'poverty', quitoTab = 'poor', eduTab = 'years';
+let welfareChart, densityChart, accuracyChart, quitoChart;
+let demoCharts = {}, eduCharts = {}, welfareOutCharts = {};
+
+// ============================================================
+// TABS
+// ============================================================
+const tabTitles = {
+  consumption: 'Welfare Distribution', demographics: 'Household Characteristics',
+  education: 'Education Profiles', welfare: 'Welfare Outcomes',
+  density: 'Density / ECDF', accuracy: 'Predictive Accuracy', quito: 'Poverty/Inequality Trends'
+};
+
+document.querySelectorAll('#sidebar-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('#sidebar-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('page-title').textContent = tabTitles[tab];
+    initTab(tab);
+  });
+});
+
+function initTab(tab) {
+  if (tab === 'consumption') renderWelfareChart();
+  if (tab === 'demographics') renderComparison('demo', dataDemographics, v => v.toFixed(2), document.getElementById('demo-content'));
+  if (tab === 'education') renderEduTab();
+  if (tab === 'welfare') renderComparison('welout', dataWelfare, v => v.toLocaleString(undefined, {maximumFractionDigits:0}), document.getElementById('welfare-content'));
+  if (tab === 'density') renderDensityChart();
+  if (tab === 'accuracy') renderAccuracyChart();
+  if (tab === 'quito') renderQuitoChart();
+}
+
+// ============================================================
+// WELFARE DISTRIBUTION
+// ============================================================
+function renderWelfareChart() {
+  const rows = dataDistributions[welfareDataset][welfareGroup];
+  const labels = rows.map(r => r.category);
+  const blssVals = rows.map(r => welfareMetric === 'share' ? r.share_BLSS : r.pc_BLSS);
+  const lfsVals = rows.map(r => welfareMetric === 'share' ? r.share_LFS : r.pc_LFS);
+  const fmt = welfareMetric === 'share' ? v => (v*100).toFixed(2)+'%' : v => v.toLocaleString();
+
+  if (welfareChart) welfareChart.destroy();
+  welfareChart = new Chart(document.getElementById('welfareChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'BLSS 2022', data: blssVals, backgroundColor: COLORS.primary, borderWidth: 0 },
+        { label: 'LFS 2022 (Imputed)', data: lfsVals, backgroundColor: COLORS.secondary, borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11, weight: 700 } } },
+        y: { grid: { color: '#F1F3F5' }, ticks: { callback: welfareMetric === 'share' ? v => (v*100).toFixed(0)+'%' : v => v.toLocaleString(), font: { size: 10 } }, border: { display: false } }
+      }
     }
-  };
+  });
+}
 
-  const filteredPoor = useMemo(() => data.poor.filter(d => selectedMetrics.includes(d.metric)), [data.poor, selectedMetrics]);
-  const filteredNonPoor = useMemo(() => data.nonPoor.filter(d => selectedMetrics.includes(d.metric)), [data.nonPoor, selectedMetrics]);
+// ctrl buttons
+['dataset-btns','group-btns','metric-btns'].forEach(id => {
+  document.getElementById(id).querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'dataset-btns') welfareDataset = btn.dataset.val;
+      if (id === 'group-btns') welfareGroup = btn.dataset.val;
+      if (id === 'metric-btns') welfareMetric = btn.dataset.val;
+      renderWelfareChart();
+    });
+  });
+});
 
-  const globalMax = useMemo(() => {
-    const allVals = [];
-    [...filteredPoor, ...filteredNonPoor].forEach(d => allVals.push(d.BLSS || 0, d.LFS || 0));
-    return allVals.length > 0 ? Math.max(...allVals) * 1.1 : 0;
-  }, [filteredPoor, filteredNonPoor]);
+// ============================================================
+// COMPARISON VIEW (Demographics, Welfare, Education)
+// ============================================================
+function renderComparison(prefix, data, formatFn, container) {
+  if (!container) return;
+  const selectedMetrics = new Set(data.metrics);
+  let chartType = 'bar';
+  let povertyView = 'both';
+  let poorChart, nonPoorChart;
 
-  const renderSpider = (radarData, label) => (
-    <div className="flex flex-col h-full">
-      <div className="text-center text-[10px] font-black text-slate-400 mb-6 uppercase tracking-[0.25em]">{label}</div>
-      <div className="flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
-            <PolarGrid stroke="#DEE2E6" />
-            <PolarAngleAxis dataKey="metric" tick={{ fill: '#495057', fontSize: 9, fontWeight: 600 }} />
-            <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{fontSize: 8, fill: '#ADB5BD'}} axisLine={false} />
-            <Radar name="BLSS 2022" dataKey="BLSS" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.08} strokeWidth={2.5} />
-            <Radar name="LFS 2022 (Imputed)" dataKey="LFS" stroke={COLORS.secondary} fill={COLORS.secondary} fillOpacity={0.08} strokeWidth={2.5} />
-            <Tooltip 
-              contentStyle={{ border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', fontSize: '11px' }}
-              formatter={(val) => [formatValue(val), ""]} 
-            />
-          </RadarChart>
-        </ResponsiveContainer>
+  function html() {
+    return `
+      <div style="display:flex;justify-content:flex-end;gap:1rem;margin-bottom:1rem;align-items:center;">
+        <div class="view-toggle">
+          <button id="${prefix}-bar" class="${chartType==='bar'?'active':''}" onclick="window['${prefix}_setChart']('bar')">Bar</button>
+          <button id="${prefix}-spider" class="${chartType==='spider'?'active':''}" onclick="window['${prefix}_setChart']('spider')">Radar</button>
+        </div>
+        <select class="view-select" id="${prefix}-pov-sel" onchange="window['${prefix}_setPov'](this.value)">
+          <option value="both" ${povertyView==='both'?'selected':''}>Poor & Non-Poor</option>
+          <option value="poor" ${povertyView==='poor'?'selected':''}>Poor</option>
+          <option value="nonPoor" ${povertyView==='nonPoor'?'selected':''}>Non-Poor</option>
+        </select>
       </div>
-    </div>
-  );
-
-  const renderBar = (barData, label) => (
-    <div className="flex flex-col h-full">
-      <div className="text-center text-[10px] font-black text-slate-400 mb-6 uppercase tracking-[0.25em]">{label}</div>
-      <div className="flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-            <CartesianGrid strokeDasharray="0" vertical={false} stroke="#F1F3F5" />
-            <XAxis dataKey="metric" angle={-30} textAnchor="end" interval={0} tick={{fontSize: 9, fill: '#495057', fontWeight: 600}} height={65} axisLine={{stroke: '#CED4DA'}} tickLine={false} />
-            <YAxis domain={[0, globalMax]} tick={{fontSize: 9, fill: '#ADB5BD'}} tickFormatter={formatValue} axisLine={false} tickLine={false} />
-            <Tooltip 
-              cursor={{fill: '#F8F9FA'}} 
-              contentStyle={{ border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
-              formatter={(val) => [formatValue(val), ""]} 
-            />
-            <Bar dataKey="BLSS" name="BLSS 2022" fill={COLORS.primary} barSize={28} />
-            <Bar dataKey="LFS" name="LFS 2022 (Imputed)" fill={COLORS.secondary} barSize={28} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div class="metric-pills" id="${prefix}-pills">
+        ${data.metrics.map(m => `<button class="metric-pill ${selectedMetrics.has(m)?'active':''}" onclick="window['${prefix}_toggleMetric']('${m}')">${m}</button>`).join('')}
       </div>
-    </div>
-  );
-
-  return (
-    <div className="mb-24">
-      <div className="flex justify-end mb-8">
-        <div className="flex items-center gap-3 bg-white p-1 rounded-md border border-slate-200">
-          <div className="flex p-1 bg-slate-50 rounded">
-            <button 
-              onClick={() => setChartType('bar')}
-              className={`p-2 transition-all ${chartType === 'bar' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-            ><BarChart2 size={16} /></button>
-            <button 
-              onClick={() => setChartType('spider')}
-              className={`p-2 transition-all ${chartType === 'spider' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-            ><PieChart size={16} /></button>
-          </div>
-          <select 
-            value={povertyView} 
-            onChange={(e) => setPovertyView(e.target.value)}
-            className="bg-transparent text-[10px] font-bold text-slate-700 px-4 py-2 focus:outline-none cursor-pointer uppercase tracking-widest border-l border-slate-200"
-          >
-            <option value="both">Poor & Non-Poor</option>
-            <option value="poor">Poor</option>
-            <option value="nonPoor">Non-Poor</option>
-          </select>
+      <div class="chart-card">
+        <div class="${povertyView==='both'?'charts-grid':'charts-grid single'}">
+          ${povertyView !== 'nonPoor' ? `<div><div class="chart-sub-label">POOR</div><div class="chart-wrap"><canvas id="${prefix}-poor-chart" height="280"></canvas></div></div>` : ''}
+          ${povertyView !== 'poor' ? `<div><div class="chart-sub-label">NON-POOR</div><div class="chart-wrap"><canvas id="${prefix}-nonpoor-chart" height="280"></canvas></div></div>` : ''}
+        </div>
+        <div class="legend" style="margin-top:1rem;">
+          <div class="legend-item"><div class="legend-dot" style="background:#002B49"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#708090"></div>LFS 2022 (Imputed)</div>
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-2 mb-12">
-        {data.metrics.map(m => (
-          <button
-            key={m}
-            onClick={() => toggleMetric(m)}
-            className={`text-[9px] px-5 py-2 border transition-all duration-300 font-bold tracking-wider uppercase ${
-              selectedMetrics.includes(m) 
-              ? 'bg-[#002B49] border-[#002B49] text-white' 
-              : 'bg-white border-slate-300 text-slate-400 hover:border-slate-500 hover:text-slate-600'
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white border border-slate-200 p-12 mb-12 shadow-sm">
-        <div className={`grid grid-cols-1 ${povertyView === 'both' ? 'lg:grid-cols-2' : 'grid-cols-1'} gap-20 h-[450px]`}>
-          {(povertyView === 'both' || povertyView === 'poor') && (
-            chartType === 'spider' ? renderSpider(filteredPoor, "Poor") : renderBar(filteredPoor, "Poor")
-          )}
-          {(povertyView === 'both' || povertyView === 'nonPoor') && (
-            chartType === 'spider' ? renderSpider(filteredNonPoor, "Non-Poor") : renderBar(filteredNonPoor, "Non-Poor")
-          )}
-        </div>
-        <div className="flex justify-center mt-12 gap-12 border-t border-slate-50 pt-8">
-            <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-[#002B49]"></div>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">BLSS 2022</span>
-            </div>
-            <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-[#708090]"></div>
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">LFS 2022 (Imputed)</span>
-            </div>
-        </div>
-      </div>
-
-      <div className="overflow-hidden border border-slate-200 bg-white">
-        <table className="w-full text-[11px] text-left border-collapse">
+      <div style="overflow:auto;margin-bottom:2rem;">
+        <table class="data-table">
           <thead>
-            <tr className="bg-slate-50">
-              <th className="px-10 py-5 font-bold text-slate-600 w-1/3 uppercase tracking-widest text-[9px]">Key Indicator</th>
-              <th colSpan="2" className="px-4 py-5 text-center border-l border-slate-200 text-slate-900 font-black uppercase tracking-widest text-[10px]">Poor</th>
-              <th colSpan="2" className="px-4 py-5 text-center border-l border-slate-200 text-slate-900 font-black uppercase tracking-widest text-[10px]">Non-poor</th>
-            </tr>
-            <tr className="bg-white border-b border-slate-100">
-              <th></th>
-              <th className="px-2 py-3 text-center border-l border-slate-100 text-[9px] text-slate-400 font-bold uppercase tracking-tighter">BLSS 2022</th>
-              <th className="px-2 py-3 text-center text-[9px] text-slate-400 font-bold uppercase tracking-tighter">LFS 2022 (Imputed)</th>
-              <th className="px-2 py-3 text-center border-l border-slate-100 text-[9px] text-slate-400 font-bold uppercase tracking-tighter">BLSS 2022</th>
-              <th className="px-2 py-3 text-center text-[9px] text-slate-400 font-bold uppercase tracking-tighter">LFS 2022 (Imputed)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.metrics.filter(m => selectedMetrics.includes(m)).map((metric) => {
-              const p = data.poor.find(d => d.metric === metric) || { BLSS: 0, LFS: 0 };
-              const np = data.nonPoor.find(d => d.metric === metric) || { BLSS: 0, LFS: 0 };
-              return (
-                <tr key={metric} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-10 py-4 font-bold text-slate-700">{metric}</td>
-                  <td className="px-2 py-4 text-center border-l border-slate-50 text-slate-500 font-mono text-[10px]">{formatValue(p.BLSS)}</td>
-                  <td className="px-2 py-4 text-center text-slate-500 font-mono text-[10px]">{formatValue(p.LFS)}</td>
-                  <td className="px-2 py-4 text-center border-l border-slate-50 text-slate-500 font-mono text-[10px]">{formatValue(np.BLSS)}</td>
-                  <td className="px-2 py-4 text-center text-slate-500 font-mono text-[10px]">{formatValue(np.LFS)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-// --- ACCURACY CUSTOM COMPONENTS ---
-
-const CustomDot = (props) => {
-  const { cx, cy, payload } = props;
-  const { shape, color } = payload;
-
-  if (shape === 'circle') {
-    return <circle cx={cx} cy={cy} r={6} fill={color} stroke="white" strokeWidth={2} />;
-  }
-  if (shape === 'triangle') {
-    return (
-      <path 
-        d={`M ${cx} ${cy - 7} L ${cx - 7} ${cy + 7} L ${cx + 7} ${cy + 7} Z`} 
-        fill={color} 
-        stroke="white" 
-        strokeWidth={2} 
-      />
-    );
-  }
-  if (shape === 'diamond') {
-    return (
-      <path 
-        d={`M ${cx} ${cy - 8} L ${cx + 8} ${cy} L ${cx} ${cy + 8} L ${cx - 8} ${cy} Z`} 
-        fill={color} 
-        stroke="white" 
-        strokeWidth={2} 
-      />
-    );
-  }
-  return <rect x={cx - 5} y={cy - 5} width={10} height={10} fill={color} stroke="white" strokeWidth={2} />;
-};
-
-const AccuracyChart = ({ data, yDomain, yTicks, yLabel, formatFn, showLine = false }) => (
-  <div className="bg-white border border-slate-200 p-12 shadow-sm relative overflow-hidden rounded-sm">
-    <div className="h-[550px]">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 60, right: 30, left: 50, bottom: 80 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F3F5" />
-          <XAxis 
-            dataKey="name" 
-            tick={{fontSize: 9, fill: '#495057', fontWeight: 700}}
-            angle={-30}
-            textAnchor="end"
-            interval={0}
-            height={60}
-            axisLine={{stroke: '#CED4DA'}}
-          />
-          <YAxis 
-            domain={yDomain}
-            ticks={yTicks}
-            tick={{fontSize: 11, fill: '#495057', fontWeight: 600}} 
-            axisLine={false} 
-            tickLine={false}
-          >
-             <Label value={yLabel} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#64748b', fontSize: '11px', fontWeight: 600, opacity: 0.8 }} offset={-15} />
-          </YAxis>
-          <Tooltip 
-            contentStyle={{ background: 'white', border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
-            formatter={(val, name, props) => [
-                <div key="tip" className="text-slate-900">
-                    <div>Estimate: {formatFn(val)}</div>
-                    <div className="text-[9px] text-slate-400 mt-1">CI: {formatFn(props.payload.low)} - {formatFn(props.payload.high)}</div>
-                </div>, 
-                "Metric"
-            ]}
-          />
-          
-          {showLine && (
-            <Line 
-              type="monotone" 
-              dataKey="trendValue" 
-              stroke={COLORS.imputedRed} 
-              strokeWidth={2} 
-              dot={false} 
-              activeDot={false} 
-              strokeDasharray="5 5"
-              connectNulls={false} 
-            />
-          )}
-
-          <Scatter dataKey="estimate" shape={<CustomDot />}>
-            <ErrorBar dataKey="relError" width={6} strokeWidth={1.5} stroke="#94A3B8" direction="y" />
-            <LabelList 
-              dataKey="estimate" 
-              position="top" 
-              offset={15}
-              content={(props) => {
-                const { x, y, value, index } = props;
-                const entry = data[index];
-                if (!entry) return null;
-                return (
-                  <Text x={x} y={y - 15} fill={entry.color} fontSize={11} fontWeight={900} textAnchor="middle">
-                    {formatFn(value)}
-                  </Text>
-                );
-              }}
-            />
-          </Scatter>
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-);
-
-const PredictiveAccuracyView = () => {
-  const [subView, setSubView] = useState('poverty');
-  const activeData = subView === 'poverty' ? povertyAccuracyData : inequalityAccuracyData;
-  
-  return (
-    <div className="space-y-12 animate-in fade-in duration-700">
-      <div className="flex justify-center">
-        <div className="flex p-1 bg-slate-100 border border-slate-200 rounded-sm w-full max-w-lg shadow-inner">
-          <button onClick={() => setSubView('poverty')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'poverty' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Poverty Rate</button>
-          <button onClick={() => setSubView('inequality')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'inequality' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inequality (Gini)</button>
-        </div>
-      </div>
-
-      <AccuracyChart 
-        data={activeData}
-        yDomain={subView === 'poverty' ? [7, 16] : [20, 45]}
-        yTicks={subView === 'poverty' ? [7, 8, 9, 10, 11, 12, 13, 14, 15, 16] : [20, 25, 30, 35, 40, 45]}
-        yLabel={subView === 'poverty' ? 'Poverty rate (%)' : 'Gini Coefficient'}
-        formatFn={(v) => subView === 'poverty' ? `${v.toFixed(2)}%` : v.toFixed(2)}
-      />
-    </div>
-  );
-};
-
-// --- QUITO VIEW (TRENDS CATEGORY) ---
-
-const QuitoView = () => {
-  const [subView, setSubView] = useState('auxPoor');
-  const activeData = subView === 'auxPoor' ? quitoPoorData : quitoGinData;
-  
-  return (
-    <div className="space-y-12 animate-in fade-in duration-700">
-      <div className="flex justify-center">
-        <div className="flex p-1 bg-slate-100 border border-slate-200 rounded-sm w-full max-w-lg shadow-inner">
-          <button onClick={() => setSubView('auxPoor')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'auxPoor' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Poverty Trend</button>
-          <button onClick={() => setSubView('auxGin')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'auxGin' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Inequality Trend</button>
-        </div>
-      </div>
-
-      <AccuracyChart 
-        data={activeData}
-        yDomain={subView === 'auxPoor' ? [7, 15] : [25, 33]}
-        yTicks={subView === 'auxPoor' ? [7, 8, 9, 10, 11, 12, 13, 14, 15] : [25, 26, 27, 28, 29, 30, 31, 32, 33]}
-        yLabel={subView === 'auxPoor' ? 'Poverty rate (%)' : 'Gini Coefficient'}
-        formatFn={(v) => subView === 'auxPoor' ? `${v.toFixed(2)}%` : v.toFixed(2)}
-        showLine={true}
-      />
-
-      <div className="overflow-hidden border border-slate-200 bg-white">
-        <table className="w-full text-[11px] text-left">
-          <thead className="bg-slate-50 text-slate-500 font-black uppercase tracking-[0.2em] border-b border-slate-200">
             <tr>
-              <th className="px-12 py-6 text-[9px]">Series</th>
-              <th className="px-12 py-6 text-slate-900 text-[10px]">Estimate</th>
-              <th className="px-12 py-6 text-slate-900 text-[10px]">CI (Lower)</th>
-              <th className="px-12 py-6 text-slate-900 text-[10px]">CI (Upper)</th>
+              <th>Indicator</th>
+              <th class="sep" colspan="2" style="text-align:center;">Poor</th>
+              <th class="sep" colspan="2" style="text-align:center;">Non-Poor</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th class="sep" style="text-align:center;font-size:.55rem;">BLSS 2022</th>
+              <th style="text-align:center;font-size:.55rem;">LFS 2022</th>
+              <th class="sep" style="text-align:center;font-size:.55rem;">BLSS 2022</th>
+              <th style="text-align:center;font-size:.55rem;">LFS 2022</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {activeData.map((row, idx) => (
-              <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                <td className="px-12 py-5 font-black text-slate-800 uppercase tracking-widest text-[10px]">{row.name}</td>
-                <td className="px-12 py-5 font-mono text-slate-900 font-bold">{subView === 'auxPoor' ? `${row.estimate.toFixed(2)}%` : row.estimate.toFixed(2)}</td>
-                <td className="px-12 py-5 font-mono text-slate-500">{subView === 'auxPoor' ? `${row.low.toFixed(2)}%` : row.low.toFixed(2)}</td>
-                <td className="px-12 py-5 font-mono text-slate-500">{subView === 'auxPoor' ? `${row.high.toFixed(2)}%` : row.high.toFixed(2)}</td>
-              </tr>
-            ))}
+          <tbody>
+            ${data.metrics.filter(m=>selectedMetrics.has(m)).map(metric=>{
+              const p=data.poor.find(d=>d.metric===metric)||{BLSS:0,LFS:0};
+              const np=data.nonPoor.find(d=>d.metric===metric)||{BLSS:0,LFS:0};
+              return `<tr>
+                <td class="label">${metric}</td>
+                <td class="mono sep" style="text-align:center;">${formatFn(p.BLSS)}</td>
+                <td class="mono" style="text-align:center;">${formatFn(p.LFS)}</td>
+                <td class="mono sep" style="text-align:center;">${formatFn(np.BLSS)}</td>
+                <td class="mono" style="text-align:center;">${formatFn(np.LFS)}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>
-    </div>
-  );
-};
+    `;
+  }
 
-// --- REMAINING DASHBOARD VIEWS ---
+  function renderCharts() {
+    const metrics = data.metrics.filter(m => selectedMetrics.has(m));
+    if (poorChart) poorChart.destroy();
+    if (nonPoorChart) nonPoorChart.destroy();
+    const type = chartType === 'bar' ? 'bar' : 'radar';
 
-const DensityECDFView = () => {
-  const [subView, setSubView] = useState('density');
-  return (
-    <div className="space-y-12 animate-in fade-in duration-700">
-      <div className="flex justify-center">
-        <div className="flex p-1 bg-slate-100 border border-slate-200 rounded-sm w-full max-w-lg shadow-inner">
-          <button onClick={() => setSubView('density')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'density' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Density Distribution</button>
-          <button onClick={() => setSubView('ecdf')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${subView === 'ecdf' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>ECDF Curve</button>
-        </div>
-      </div>
-      <div className="bg-white border border-slate-200 p-12 shadow-sm relative"><div className="h-[550px]">{subView === 'density' ? (<ResponsiveContainer width="100%" height="100%"><LineChart data={densityData} margin={{ top: 40, right: 30, left: 50, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F3F5" /><XAxis dataKey="log_welfare" type="number" domain={['auto', 12]} tick={{fontSize: 10, fill: '#495057'}} axisLine={{stroke: '#CED4DA'}}><Label value="Log of Consumption" offset={-35} position="insideBottom" style={{ fill: '#64748b', fontSize: '11px', fontWeight: 600 }} /></XAxis><YAxis tick={{fontSize: 10, fill: '#ADB5BD'}} axisLine={false} tickLine={false}><Label value="Density" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#64748b', fontSize: '11px', fontWeight: 600 }} /></YAxis><Tooltip contentStyle={{ border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }} labelFormatter={(val) => `Log Welfare: ${val}`} /><Legend layout="horizontal" verticalAlign="top" align="center" iconType="plainline" wrapperStyle={{ top: 10, fontSize: '11px', fontWeight: 600, color: '#64748b' }} /><Line type="monotone" dataKey="blss" name="BLSS 2022" stroke={COLORS.primary} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /><Line type="monotone" dataKey="lfs" name="LFS 2022 (Imputed)" stroke={COLORS.secondary} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /></LineChart></ResponsiveContainer>) : (<ResponsiveContainer width="100%" height="100%"><LineChart data={ecdfData} margin={{ top: 40, right: 30, left: 50, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F3F5" /><XAxis dataKey="log_welfare" type="number" domain={['auto', 'auto']} tick={{fontSize: 10, fill: '#495057'}} axisLine={{stroke: '#CED4DA'}}><Label value="Log of Consumption" offset={-35} position="insideBottom" style={{ fill: '#64748b', fontSize: '11px', fontWeight: 600 }} /></XAxis><YAxis domain={[0, 1]} tick={{fontSize: 10, fill: '#ADB5BD'}} axisLine={false} tickLine={false} tickFormatter={(val) => `${(val * 100).toFixed(0)}%`}><Label value="Cumulative Share" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fill: '#64748b', fontSize: '11px', fontWeight: 600 }} /></YAxis><Tooltip contentStyle={{ border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }} formatter={(val) => [`${(val * 100).toFixed(2)}%`, "Prob."]} labelFormatter={(val) => `Log Welfare: ${val}`} /><Legend layout="horizontal" verticalAlign="top" align="center" iconType="plainline" wrapperStyle={{ top: 10, fontSize: '11px', fontWeight: 600, color: '#64748b' }} /><Line type="monotone" dataKey="blss" name="BLSS 2022" stroke={COLORS.primary} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /><Line type="monotone" dataKey="lfs" name="LFS 2022 (Imputed)" stroke={COLORS.secondary} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} /></LineChart></ResponsiveContainer>)}</div></div>
-    </div>
-  );
-};
+    if (povertyView !== 'nonPoor') {
+      const el = document.getElementById(`${prefix}-poor-chart`);
+      if (el) {
+        const poorDataBLSS = metrics.map(m => (data.poor.find(d=>d.metric===m)||{BLSS:0}).BLSS);
+        const poorDataLFS = metrics.map(m => (data.poor.find(d=>d.metric===m)||{LFS:0}).LFS);
+        poorChart = buildCompChart(el, type, metrics, poorDataBLSS, poorDataLFS);
+      }
+    }
+    if (povertyView !== 'poor') {
+      const el = document.getElementById(`${prefix}-nonpoor-chart`);
+      if (el) {
+        const npDataBLSS = metrics.map(m => (data.nonPoor.find(d=>d.metric===m)||{BLSS:0}).BLSS);
+        const npDataLFS = metrics.map(m => (data.nonPoor.find(d=>d.metric===m)||{LFS:0}).LFS);
+        nonPoorChart = buildCompChart(el, type, metrics, npDataBLSS, npDataLFS);
+      }
+    }
+  }
 
-const WelfareDistributionView = () => {
-  const [dataset, setDataset] = useState('consumption');
-  const [group, setGroup] = useState('quintiles');
-  const [metric, setMetric] = useState('share');
+  function buildCompChart(el, type, labels, blss, lfs) {
+    const isRadar = type === 'radar';
+    return new Chart(el, {
+      type,
+      data: {
+        labels,
+        datasets: [
+          { label: 'BLSS 2022', data: blss, backgroundColor: isRadar ? 'rgba(0,43,73,0.08)' : COLORS.primary, borderColor: COLORS.primary, borderWidth: isRadar ? 2 : 0, pointBackgroundColor: COLORS.primary },
+          { label: 'LFS 2022 (Imputed)', data: lfs, backgroundColor: isRadar ? 'rgba(112,128,144,0.08)' : COLORS.secondary, borderColor: COLORS.secondary, borderWidth: isRadar ? 2 : 0, pointBackgroundColor: COLORS.secondary }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatFn(ctx.raw) } } },
+        scales: isRadar ? {} : {
+          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 30 } },
+          y: { grid: { color: '#F1F3F5' }, ticks: { callback: v => formatFn(v), font: { size: 9 } }, border: { display: false } }
+        }
+      }
+    });
+  }
 
-  const activeData = dataDistributions[dataset][group];
-  const chartData = activeData.map(item => ({
-    category: item.category,
-    BLSS: metric === 'share' ? item.share_BLSS : item.pc_BLSS,
-    LFS: metric === 'share' ? item.share_LFS : item.pc_LFS
-  }));
+  window[`${prefix}_toggleMetric`] = (m) => {
+    if (selectedMetrics.has(m)) { if (selectedMetrics.size > 1) selectedMetrics.delete(m); }
+    else selectedMetrics.add(m);
+    container.innerHTML = html(); renderCharts();
+  };
+  window[`${prefix}_setChart`] = (t) => { chartType = t; container.innerHTML = html(); renderCharts(); };
+  window[`${prefix}_setPov`] = (v) => { povertyView = v; container.innerHTML = html(); renderCharts(); };
 
-  const formatValue = (val) => metric === 'share' ? val.toFixed(4) : val.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const xAxisTitle = `Ranking: Household ${dataset === 'income' ? 'Labor Income' : 'Consumption'} (${group})`;
-  const yAxisTitle = metric === 'share' ? 'Outcome: Food Consumption Share' : 'Outcome: Per Capita Consumption';
-
-  return (
-    <div className="space-y-16 animate-in fade-in duration-700">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-        <ControlGroup label="Ranking Base" current={dataset} options={[{v:'consumption', l:'Consumption'}, {v:'income', l:'Labor Income'}]} onChange={setDataset} />
-        <ControlGroup label="Aggregation" current={group} options={[{v:'quintiles', l:'Quantiles'}, {v:'deciles', l:'Deciles'}]} onChange={setGroup} />
-        <ControlGroup label="Outcome Indicator" current={metric} options={[{v:'share', l:'Food Share'}, {v:'pc', l:'Per Capita Consumption'}]} onChange={setMetric} />
-      </div>
-      <div className="bg-white border border-slate-200 p-12 h-[560px] shadow-sm"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 20, right: 30, left: 30, bottom: 80 }}><CartesianGrid strokeDasharray="0" vertical={false} stroke="#F1F3F5" /><XAxis dataKey="category" axisLine={{stroke: '#CED4DA'}} tickLine={false} tick={{fontSize: 12, fill: '#495057', fontWeight: 700}}><Label value={xAxisTitle} offset={-50} position="insideBottom" style={{ fill: '#ADB5BD', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em' }} /></XAxis><YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#ADB5BD'}} tickFormatter={(v) => metric === 'share' ? `${(v*100).toFixed(0)}%` : v.toLocaleString()}><Label value={yAxisTitle} angle={-90} position="insideLeft" offset={-15} style={{ textAnchor: 'middle', fill: '#ADB5BD', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em' }} /></YAxis><Tooltip cursor={{fill: '#F8F9FA'}} contentStyle={{border: '1px solid #DEE2E6', borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)'}} formatter={(val) => [formatValue(val), ""]} /><Legend verticalAlign="top" align="right" iconType="rect" wrapperStyle={{ paddingBottom: '40px' }} /><Bar dataKey="BLSS" name="BLSS 2022" fill={COLORS.primary} radius={0} barSize={dataset === 'quintiles' ? 60 : 30} /><Bar dataKey="LFS" name="LFS 2022 (Imputed)" fill={COLORS.secondary} radius={0} barSize={dataset === 'quintiles' ? 60 : 30} /></BarChart></ResponsiveContainer></div>
-    </div>
-  );
-};
-
-const EducationView = () => {
-  const [subTab, setSubTab] = useState('years');
-  return (
-    <div className="space-y-16 animate-in fade-in duration-500">
-      <div className="flex justify-center mb-20"><div className="flex p-1 bg-slate-100 border border-slate-200 rounded-sm w-full max-w-lg shadow-inner"><button onClick={() => setSubTab('years')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-700 ${subTab === 'years' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Years of Education</button><button onClick={() => setSubTab('level')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-700 ${subTab === 'level' ? 'bg-white text-slate-900 border border-slate-200 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Education level</button></div></div>
-      <div key={subTab} className="animate-in fade-in slide-in-from-bottom-2 duration-300">{subTab === 'years' ? (<ComparisonSection data={dataEducationYears} formatValue={(v) => v.toFixed(2)} />) : (<ComparisonSection data={dataEducationLevelHead} formatValue={(v) => (v * 100).toFixed(1) + '%'} />)}</div>
-    </div>
-  );
-};
-
-function ControlGroup({ label, current, options, onChange }) {
-    return (
-        <div className="space-y-4">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.35em] ml-1">{label}</span>
-            <div className="flex flex-col bg-white border border-slate-200 rounded-sm overflow-hidden">
-                {options.map(opt => (
-                    <button 
-                        key={opt.v}
-                        onClick={() => onChange(opt.v)} 
-                        className={`text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b border-slate-100 last:border-0 ${current === opt.v ? 'bg-[#002B49] text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        {opt.l}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
+  container.innerHTML = html();
+  renderCharts();
 }
 
-// --- MAIN DASHBOARD ---
+// ============================================================
+// EDUCATION
+// ============================================================
+function renderEduTab() {
+  const container = document.getElementById('edu-content');
+  const data = eduTab === 'years' ? dataEducationYears : dataEducationLevel;
+  const fmt = eduTab === 'years' ? v => v.toFixed(2) : v => (v*100).toFixed(1)+'%';
+  renderComparison('edu_' + eduTab, data, fmt, container);
+}
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('Consumption');
+function setEduTab(tab) {
+  eduTab = tab;
+  document.getElementById('edu-years-btn').classList.toggle('active', tab === 'years');
+  document.getElementById('edu-level-btn').classList.toggle('active', tab === 'level');
+  renderEduTab();
+}
 
-  const tabs = [
-    { id: 'Consumption', label: 'Welfare Distribution' },
-    { id: 'Demographics', label: 'Household Characteristics' },
-    { id: 'Education', label: 'Education Profiles' },
-    { id: 'Welfare', label: 'Welfare Outcomes' },
-    { id: 'Density', label: 'Density / ECDF' },
-    { id: 'Accuracy', label: 'Predictive Accuracy' },
-    { id: 'Quito', label: 'POVERTY/INEQUALITY TRENDS' },
-  ];
+// ============================================================
+// DENSITY / ECDF
+// ============================================================
+function renderDensityChart() {
+  const isEcdf = densityTab === 'ecdf';
+  const src = isEcdf ? ecdfData : densityData;
+  const blssData = src.map(d => ({x: d.x, y: d.blss}));
+  const lfsData = src.map(d => ({x: d.x, y: d.lfs}));
 
-  const getHeaderTitle = () => {
-    switch(activeTab) {
-      case 'Demographics': return 'Household Characteristics';
-      case 'Education': return 'Education profiles';
-      case 'Welfare': return 'Welfare Distribution';
-      case 'Density': return 'Density / ECDF Analysis';
-      case 'Accuracy': return 'Predictive Accuracy Analysis';
-      case 'Quito': return 'POVERTY/INEQUALITY TRENDS';
-      default: return 'Welfare Distribution';
+  if (densityChart) densityChart.destroy();
+  densityChart = new Chart(document.getElementById('densityChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'BLSS 2022', data: blssData, borderColor: COLORS.primary, borderWidth: 2.5, pointRadius: 0, tension: 0.4, fill: false },
+        { label: 'LFS 2022 (Imputed)', data: lfsData, borderColor: COLORS.secondary, borderWidth: 2.5, pointRadius: 0, tension: 0.4, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Log of Consumption', color: '#94a3b8', font: { size: 11, weight: 600 } }, grid: { color: '#F1F3F5' }, ticks: { font: { size: 10 } }, border: { display: false } },
+        y: { title: { display: true, text: isEcdf ? 'Cumulative Share' : 'Density', color: '#94a3b8', font: { size: 11, weight: 600 } }, grid: { color: '#F1F3F5' }, ticks: { callback: isEcdf ? v => (v*100).toFixed(0)+'%' : null, font: { size: 10 } }, border: { display: false } }
+      }
+    }
+  });
+}
+
+function setDensityTab(tab) {
+  densityTab = tab;
+  document.getElementById('density-btn').classList.toggle('active', tab === 'density');
+  document.getElementById('ecdf-btn').classList.toggle('active', tab === 'ecdf');
+  renderDensityChart();
+}
+
+// ============================================================
+// ACCURACY CHART (scatter + error bars via custom plugin)
+// ============================================================
+function renderAccuracyChart() {
+  const data = accuracyTab === 'poverty' ? povertyAccuracyData : inequalityAccuracyData;
+  const isPov = accuracyTab === 'poverty';
+  const fmt = v => isPov ? v.toFixed(2)+'%' : v.toFixed(2);
+
+  if (accuracyChart) accuracyChart.destroy();
+
+  const errorBarPlugin = {
+    id: 'errorBar',
+    afterDatasetsDraw(chart) {
+      const {ctx} = chart;
+      chart.data.datasets[0].data.forEach((pt, i) => {
+        const meta = chart.getDatasetMeta(0);
+        const el = meta.data[i];
+        if (!el) return;
+        const entry = data[i];
+        if (!entry) return;
+        const yLow = chart.scales.y.getPixelForValue(entry.low);
+        const yHigh = chart.scales.y.getPixelForValue(entry.high);
+        const x = el.x;
+        ctx.save();
+        ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, yLow); ctx.lineTo(x, yHigh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yLow); ctx.lineTo(x+5, yLow); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yHigh); ctx.lineTo(x+5, yHigh); ctx.stroke();
+        ctx.restore();
+      });
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#FDFDFD] flex flex-col md:flex-row font-sans text-slate-900 antialiased selection:bg-[#002B49] selection:text-white">
-      <aside className="w-full md:w-80 bg-[#002B49] text-white flex flex-col shrink-0 z-20 shadow-[10px_0_30px_rgba(0,0,0,0.1)]">
-        <div className="p-10">
-          <div className="flex flex-col gap-1 mb-20 border-b border-white/10 pb-10">
-              <h1 className="text-xl font-bold tracking-widest leading-none uppercase">BHUTAN</h1>
-              <span className="text-sm font-medium tracking-tight text-white/60">S2S Imputation</span>
-          </div>
-          <nav className="space-y-4">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full group flex items-center justify-between px-4 py-4 transition-all duration-300 rounded-sm ${activeTab === tab.id ? 'bg-white text-[#002B49] font-bold' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-              >
-                <span className="text-xs uppercase tracking-widest">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      <main className="flex-1 overflow-y-auto relative">
-        <header className="px-16 py-12 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-          <h2 className="text-4xl font-bold text-slate-900 tracking-tighter uppercase">{getHeaderTitle()}</h2>
-        </header>
-
-        <div className="px-16 py-16 max-w-[1500px] mx-auto">
-          <div className="min-h-[900px]">
-            {activeTab === 'Consumption' && <WelfareDistributionView />}
-            {activeTab === 'Demographics' && <ComparisonSection data={dataDemographics} formatValue={(v) => v < 2 && v > -2 ? v.toFixed(3) : v.toFixed(1)} />}
-            {activeTab === 'Education' && <EducationView />}
-            {activeTab === 'Welfare' && <ComparisonSection data={dataWelfare} formatValue={(v) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })} />}
-            {activeTab === 'Density' && <DensityECDFView />}
-            {activeTab === 'Accuracy' && <PredictiveAccuracyView />}
-            {activeTab === 'Quito' && <QuitoView />}
-          </div>
-          <footer className="mt-32 pb-16 border-t border-slate-200 pt-12"><Landmark size={16} className="text-slate-400" /></footer>
-        </div>
-      </main>
-    </div>
-  );
+  accuracyChart = new Chart(document.getElementById('accuracyChart'), {
+    type: 'scatter',
+    plugins: [errorBarPlugin],
+    data: {
+      datasets: [{
+        label: 'Estimate',
+        data: data.map((d,i) => ({x: i, y: d.estimate})),
+        backgroundColor: data.map(d => d.color),
+        pointRadius: 7, pointHoverRadius: 9,
+        borderColor: 'white', borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => {
+            const d = data[ctx.dataIndex];
+            return [`Estimate: ${fmt(d.estimate)}`, `CI: ${fmt(d.low)} – ${fmt(d.high)}`];
+          },
+          title: ctx => data[ctx[0].dataIndex].name
+        }}
+      },
+      scales: {
+        x: {
+          type: 'linear', min: -0.5, max: data.length - 0.5,
+          ticks: {
+            callback: (v) => {
+              const d = data[Math.round(v)];
+              return d ? d.name : '';
+            },
+            stepSize: 1, maxRotation: 30, font: { size: 9, weight: 700 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          min: isPov ? 7 : 20, max: isPov ? 16 : 45,
+          grid: { color: '#F1F3F5' },
+          title: { display: true, text: isPov ? 'Poverty rate (%)' : 'Gini Coefficient', color: '#94a3b8', font: { size: 11, weight: 600 } },
+          ticks: { font: { size: 10 } }, border: { display: false }
+        }
+      }
+    }
+  });
 }
+
+function setAccuracyTab(tab) {
+  accuracyTab = tab;
+  document.getElementById('acc-poverty-btn').classList.toggle('active', tab === 'poverty');
+  document.getElementById('acc-gini-btn').classList.toggle('active', tab === 'inequality');
+  renderAccuracyChart();
+}
+
+// ============================================================
+// QUITO TRENDS
+// ============================================================
+function renderQuitoChart() {
+  const data = quitoTab === 'poor' ? quitoPoorData : quitoGinData;
+  const isPov = quitoTab === 'poor';
+  const fmt = v => isPov ? v.toFixed(2)+'%' : v.toFixed(2);
+
+  const errorBarPlugin = {
+    id: 'quitoEB',
+    afterDatasetsDraw(chart) {
+      const {ctx} = chart;
+      chart.data.datasets[0].data.forEach((pt, i) => {
+        const meta = chart.getDatasetMeta(0);
+        const el = meta.data[i];
+        if (!el) return;
+        const entry = data[i];
+        const yLow = chart.scales.y.getPixelForValue(entry.low);
+        const yHigh = chart.scales.y.getPixelForValue(entry.high);
+        const x = el.x;
+        ctx.save();
+        ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, yLow); ctx.lineTo(x, yHigh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yLow); ctx.lineTo(x+5, yLow); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yHigh); ctx.lineTo(x+5, yHigh); ctx.stroke();
+        ctx.restore();
+      });
+    }
+  };
+
+  if (quitoChart) quitoChart.destroy();
+  quitoChart = new Chart(document.getElementById('quitoChart'), {
+    type: 'scatter',
+    plugins: [errorBarPlugin],
+    data: {
+      datasets: [{
+        data: data.map((d, i) => ({x: i, y: d.estimate})),
+        backgroundColor: data.map(d => d.color),
+        pointRadius: 7, pointHoverRadius: 9,
+        borderColor: 'white', borderWidth: 2
+      },{
+        // trend line (imputed only)
+        type: 'line',
+        data: data.map((d, i) => i === 0 ? null : {x: i, y: d.estimate}),
+        borderColor: COLORS.imputed, borderWidth: 2, borderDash: [5,5],
+        pointRadius: 0, fill: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => {
+            if (ctx.datasetIndex !== 0) return null;
+            const d = data[ctx.dataIndex];
+            return [`Estimate: ${fmt(d.estimate)}`, `CI: ${fmt(d.low)} – ${fmt(d.high)}`];
+          },
+          title: ctx => {
+            if (ctx[0].datasetIndex !== 0) return null;
+            return data[ctx[0].dataIndex].name;
+          }
+        }}
+      },
+      scales: {
+        x: {
+          type: 'linear', min: -0.5, max: data.length - 0.5,
+          ticks: { callback: v => { const d = data[Math.round(v)]; return d ? d.name : ''; }, stepSize: 1, maxRotation: 20, font: { size: 9, weight: 700 } },
+          grid: { display: false }
+        },
+        y: {
+          min: isPov ? 7 : 25, max: isPov ? 15 : 33,
+          grid: { color: '#F1F3F5' },
+          title: { display: true, text: isPov ? 'Poverty rate (%)' : 'Gini Coefficient', color: '#94a3b8', font: { size: 11, weight: 600 } },
+          ticks: { font: { size: 10 } }, border: { display: false }
+        }
+      }
+    }
+  });
+
+  // Table
+  const t = document.getElementById('quito-table');
+  t.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Series</th><th>Estimate</th><th>CI (Lower)</th><th>CI (Upper)</th>
+    </tr></thead>
+    <tbody>
+      ${data.map(row => `<tr>
+        <td class="label">${row.name}</td>
+        <td class="mono">${fmt(row.estimate)}</td>
+        <td class="mono">${fmt(row.low)}</td>
+        <td class="mono">${fmt(row.high)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function setQuitoTab(tab) {
+  quitoTab = tab;
+  document.getElementById('quito-poor-btn').classList.toggle('active', tab === 'poor');
+  document.getElementById('quito-gini-btn').classList.toggle('active', tab === 'gini');
+  renderQuitoChart();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderWelfareChart();
+</script>
+</body>
+</html>
