@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bhutan S2S Imputation Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #002B49;
+    --secondary: #708090;
+    --mahal: #D62828;
+    --euclid: #8338EC;
+    --canberra: #06D6A0;
+    --imputed: #D62828;
+    --grid: #F1F3F5;
+    --bg: #FDFDFD;
+    --border: #CED4DA;
+    --text: #1e293b;
+    --muted: #64748b;
+    --light: #f8fafc;
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+  
+  /* SIDEBAR */
+  aside {
+    width: 280px; min-width: 280px; background: var(--primary); color: white;
+    display: flex; flex-direction: column; padding: 2rem 1.5rem;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.15); position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .brand { border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .brand h1 { font-size: 1.25rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
+  .brand span { font-size: 0.75rem; color: rgba(255,255,255,0.5); font-weight: 400; }
+  nav { display: flex; flex-direction: column; gap: 0.35rem; }
+  nav button {
+    background: none; border: none; color: rgba(255,255,255,0.55); text-align: left;
+    padding: 0.75rem 1rem; font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 700; cursor: pointer; border-radius: 3px; transition: all 0.2s; font-family: inherit;
+  }
+  nav button:hover { background: rgba(255,255,255,0.06); color: white; }
+  nav button.active { background: white; color: var(--primary); font-weight: 800; }
+
+  /* MAIN */
+  main { flex: 1; overflow-y: auto; }
+  header { padding: 2.5rem 3.5rem 2rem; border-bottom: 1px solid var(--border); }
+  header h2 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; text-transform: uppercase; }
+  .content { padding: 2.5rem 3.5rem; max-width: 1300px; }
+
+  /* TABS */
+  .tab-view { display: none; }
+  .tab-view.active { display: block; }
+
+  /* CONTROLS */
+  .controls-row { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 0.5rem; min-width: 160px; }
+  .ctrl-group label { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: var(--muted); }
+  .ctrl-group .ctrl-btns { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; background: white; }
+  .ctrl-btns button {
+    background: none; border: none; border-bottom: 1px solid #f1f3f5; padding: 0.6rem 1rem;
+    text-align: left; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .ctrl-btns button:last-child { border-bottom: none; }
+  .ctrl-btns button:hover { background: #f8fafc; }
+  .ctrl-btns button.active { background: var(--primary); color: white; }
+
+  /* TOGGLE PILLS */
+  .toggle-pills { display: flex; background: #f1f3f5; border: 1px solid var(--border); border-radius: 3px; padding: 3px; margin-bottom: 1.5rem; max-width: 480px; }
+  .toggle-pills button {
+    flex: 1; background: none; border: none; padding: 0.6rem 0.5rem;
+    font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--muted); cursor: pointer; border-radius: 2px; font-family: inherit; transition: all 0.2s;
+  }
+  .toggle-pills button.active { background: white; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+
+  /* CHART CARD */
+  .chart-card { background: white; border: 1px solid var(--border); padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .chart-wrap { position: relative; }
+
+  /* LEGEND */
+  .legend { display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 0; }
+
+  /* TABLE */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; border: 1px solid var(--border); background: white; }
+  .data-table th { background: #f8fafc; padding: 0.75rem 1rem; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #f1f5f9; color: var(--muted); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: #f8fafc; }
+  .data-table .mono { font-family: 'Courier New', monospace; font-weight: 700; color: var(--text); font-size: 0.68rem; }
+  .data-table .label { font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; }
+  th.sep { border-left: 1px solid var(--border); }
+  td.sep { border-left: 1px solid #f1f5f9; }
+
+  /* METRIC PILLS */
+  .metric-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.5rem; }
+  .metric-pill {
+    background: none; border: 1px solid var(--border); padding: 0.35rem 0.9rem;
+    font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); cursor: pointer; font-family: inherit; border-radius: 2px; transition: all 0.2s;
+  }
+  .metric-pill.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+  /* COMPARE CONTROLS */
+  .compare-controls { display: flex; justify-content: flex-end; margin-bottom: 1rem; gap: 0.75rem; align-items: center; }
+  .view-toggle { display: flex; border: 1px solid var(--border); background: white; border-radius: 3px; overflow: hidden; }
+  .view-toggle button { background: none; border: none; border-right: 1px solid var(--border); padding: 0.5rem 0.75rem; cursor: pointer; color: var(--muted); font-size: 0.7rem; font-family: inherit; transition: all 0.2s; }
+  .view-toggle button:last-child { border-right: none; }
+  .view-toggle button.active { background: var(--primary); color: white; }
+  .view-select { border: 1px solid var(--border); border-radius: 3px; padding: 0.45rem 0.75rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); background: white; cursor: pointer; font-family: inherit; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .charts-grid.single { grid-template-columns: 1fr; }
+  .chart-sub-label { text-align: center; font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25em; color: var(--muted); margin-bottom: 0.75rem; }
+
+  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); padding-bottom: 2rem; }
+  footer span { font-size: 0.65rem; color: #cbd5e1; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="brand">
+    <h1>BHUTAN</h1>
+    <span>S2S Imputation</span>
+  </div>
+  <nav id="sidebar-nav">
+    <button class="active" data-tab="consumption">Welfare Distribution</button>
+    <button data-tab="demographics">Household Characteristics</button>
+    <button data-tab="education">Education Profiles</button>
+    <button data-tab="welfare">Welfare Outcomes</button>
+    <button data-tab="density">Density / ECDF</button>
+    <button data-tab="accuracy">Predictive Accuracy</button>
+    <button data-tab="quito">Poverty/Inequality Trends</button>
+  </nav>
+</aside>
+
+<main>
+  <header>
+    <h2 id="page-title">Welfare Distribution</h2>
+  </header>
+  <div class="content">
+
+    <!-- WELFARE DISTRIBUTION -->
+    <div id="tab-consumption" class="tab-view active">
+      <div class="controls-row">
+        <div class="ctrl-group">
+          <label>Ranking Base</label>
+          <div class="ctrl-btns" id="dataset-btns">
+            <button class="active" data-val="consumption">Consumption</button>
+            <button data-val="income">Labor Income</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <label>Aggregation</label>
+          <div class="ctrl-btns" id="group-btns">
+            <button class="active" data-val="quintiles">Quintiles</button>
+            <button data-val="deciles">Deciles</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <label>Outcome Indicator</label>
+          <div class="ctrl-btns" id="metric-btns">
+            <button class="active" data-val="share">Food Share</button>
+            <button data-val="pc">Per Capita Consumption</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="welfareChart" height="320"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--secondary)"></div>LFS 2022 (Imputed)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEMOGRAPHICS -->
+    <div id="tab-demographics" class="tab-view">
+      <div id="demo-content"></div>
+    </div>
+
+    <!-- EDUCATION -->
+    <div id="tab-education" class="tab-view">
+      <div class="toggle-pills" style="margin-bottom:1.5rem;">
+        <button class="active" id="edu-years-btn" onclick="setEduTab('years')">Years of Education</button>
+        <button id="edu-level-btn" onclick="setEduTab('level')">Education Level</button>
+      </div>
+      <div id="edu-content"></div>
+    </div>
+
+    <!-- WELFARE OUTCOMES -->
+    <div id="tab-welfare" class="tab-view">
+      <div id="welfare-content"></div>
+    </div>
+
+    <!-- DENSITY / ECDF -->
+    <div id="tab-density" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="density-btn" onclick="setDensityTab('density')">Density Distribution</button>
+        <button id="ecdf-btn" onclick="setDensityTab('ecdf')">ECDF Curve</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="densityChart" height="340"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--secondary)"></div>LFS 2022 (Imputed)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCURACY -->
+    <div id="tab-accuracy" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="acc-poverty-btn" onclick="setAccuracyTab('poverty')">Poverty Rate</button>
+        <button id="acc-gini-btn" onclick="setAccuracyTab('inequality')">Inequality (Gini)</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="accuracyChart" height="380"></canvas></div>
+      </div>
+    </div>
+
+    <!-- QUITO TRENDS -->
+    <div id="tab-quito" class="tab-view">
+      <div class="toggle-pills">
+        <button class="active" id="quito-poor-btn" onclick="setQuitoTab('poor')">Poverty Trend</button>
+        <button id="quito-gini-btn" onclick="setQuitoTab('gini')">Inequality Trend</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap"><canvas id="quitoChart" height="340"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--imputed)"></div>Imputed</div>
+        </div>
+      </div>
+      <div id="quito-table"></div>
+    </div>
+
+    <footer><span>&#9632; Bhutan S2S Imputation Dashboard</span></footer>
+  </div>
+</main>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const COLORS = {
+  primary: '#002B49', secondary: '#708090',
+  mahal: '#D62828', euclid: '#8338EC', canberra: '#06D6A0', imputed: '#D62828'
+};
+
+const dataDistributions = {
+  consumption: {
+    quintiles: [
+      { category: 'Q1', share_BLSS: 0.509, share_LFS: 0.501, pc_BLSS: 6289, pc_LFS: 6116 },
+      { category: 'Q2', share_BLSS: 0.474, share_LFS: 0.467, pc_BLSS: 9928, pc_LFS: 9888 },
+      { category: 'Q3', share_BLSS: 0.458, share_LFS: 0.454, pc_BLSS: 13034, pc_LFS: 13057 },
+      { category: 'Q4', share_BLSS: 0.455, share_LFS: 0.444, pc_BLSS: 17160, pc_LFS: 17308 },
+      { category: 'Q5', share_BLSS: 0.459, share_LFS: 0.452, pc_BLSS: 28194, pc_LFS: 28944 },
+    ],
+    deciles: [
+      { category: 'D1', share_BLSS: 0.523, share_LFS: 0.509, pc_BLSS: 5113, pc_LFS: 5003 },
+      { category: 'D2', share_BLSS: 0.495, share_LFS: 0.491, pc_BLSS: 7495, pc_LFS: 7494 },
+      { category: 'D3', share_BLSS: 0.479, share_LFS: 0.476, pc_BLSS: 9173, pc_LFS: 9183 },
+      { category: 'D4', share_BLSS: 0.468, share_LFS: 0.457, pc_BLSS: 10685, pc_LFS: 10667 },
+      { category: 'D5', share_BLSS: 0.465, share_LFS: 0.456, pc_BLSS: 12187, pc_LFS: 12212 },
+      { category: 'D6', share_BLSS: 0.450, share_LFS: 0.452, pc_BLSS: 13892, pc_LFS: 13951 },
+      { category: 'D7', share_BLSS: 0.455, share_LFS: 0.443, pc_BLSS: 15937, pc_LFS: 15913 },
+      { category: 'D8', share_BLSS: 0.456, share_LFS: 0.445, pc_BLSS: 18660, pc_LFS: 18694 },
+      { category: 'D9', share_BLSS: 0.458, share_LFS: 0.454, pc_BLSS: 23067, pc_LFS: 23089 },
+      { category: 'D10', share_BLSS: 0.460, share_LFS: 0.449, pc_BLSS: 36410, pc_LFS: 35854 },
+    ]
+  },
+  income: {
+    quintiles: [
+      { category: 'Q1', share_BLSS: 0.5171, share_LFS: 0.5017, pc_BLSS: 10063.65, pc_LFS: 10769.60 },
+      { category: 'Q2', share_BLSS: 0.5000, share_LFS: 0.4927, pc_BLSS: 10339.85, pc_LFS: 10520.95 },
+      { category: 'Q3', share_BLSS: 0.4800, share_LFS: 0.4750, pc_BLSS: 12100.00, pc_LFS: 12500.00 },
+      { category: 'Q4', share_BLSS: 0.4500, share_LFS: 0.4400, pc_BLSS: 16500.00, pc_LFS: 17000.00 },
+      { category: 'Q5', share_BLSS: 0.3800, share_LFS: 0.3600, pc_BLSS: 28000.00, pc_LFS: 29500.00 },
+    ],
+    deciles: [
+      { category: 'D1', share_BLSS: 0.5096, share_LFS: 0.4725, pc_BLSS: 11161.34, pc_LFS: 12698.75 },
+      { category: 'D2', share_BLSS: 0.5219, share_LFS: 0.5319, pc_BLSS: 9375.22, pc_LFS: 8776.07 },
+      { category: 'D3', share_BLSS: 0.5080, share_LFS: 0.5100, pc_BLSS: 10100.00, pc_LFS: 10200.00 },
+      { category: 'D4', share_BLSS: 0.4900, share_LFS: 0.4850, pc_BLSS: 11500.00, pc_LFS: 11800.00 },
+      { category: 'D5', share_BLSS: 0.4850, share_LFS: 0.4800, pc_BLSS: 12800.00, pc_LFS: 13000.00 },
+      { category: 'D6', share_BLSS: 0.4700, share_LFS: 0.4650, pc_BLSS: 14200.00, pc_LFS: 14500.00 },
+      { category: 'D7', share_BLSS: 0.4600, share_LFS: 0.4500, pc_BLSS: 16000.00, pc_LFS: 16500.00 },
+      { category: 'D8', share_BLSS: 0.4300, share_LFS: 0.4200, pc_BLSS: 18500.00, pc_LFS: 19000.00 },
+      { category: 'D9', share_BLSS: 0.4000, share_LFS: 0.3800, pc_BLSS: 23000.00, pc_LFS: 24500.00 },
+      { category: 'D10', share_BLSS: 0.3500, share_LFS: 0.3300, pc_BLSS: 35000.00, pc_LFS: 38000.00 },
+    ]
+  }
+};
+
+const dataDemographics = {
+  metrics: ['HH size', 'HH members 0-14 years', 'HH members 15-64 years', 'HH members 65+ years', 'HH sex ratio M/F'],
+  poor: [
+    { metric: 'HH size', BLSS: 6.3, LFS: 6.1 },
+    { metric: 'HH members 0-14 years', BLSS: 1.9, LFS: 2.0 },
+    { metric: 'HH members 15-64 years', BLSS: 3.8, LFS: 3.5 },
+    { metric: 'HH members 65+ years', BLSS: 0.6, LFS: 0.6 },
+    { metric: 'HH sex ratio M/F', BLSS: 1.2, LFS: 1.2 },
+  ],
+  nonPoor: [
+    { metric: 'HH size', BLSS: 4.6, LFS: 4.5 },
+    { metric: 'HH members 0-14 years', BLSS: 1.2, LFS: 1.2 },
+    { metric: 'HH members 15-64 years', BLSS: 3.0, LFS: 3.0 },
+    { metric: 'HH members 65+ years', BLSS: 0.3, LFS: 0.3 },
+    { metric: 'HH sex ratio M/F', BLSS: 1.2, LFS: 1.2 },
+  ]
+};
+
+const dataEducationYears = {
+  metrics: ['Head highest years', 'Max years in HH', 'Avg years in HH', 'Spouse highest years'],
+  poor: [
+    { metric: 'Head highest years', BLSS: 1.3, LFS: 2.4 },
+    { metric: 'Max years in HH', BLSS: 8.3, LFS: 9.6 },
+    { metric: 'Avg years in HH', BLSS: 3.0, LFS: 3.7 },
+    { metric: 'Spouse highest years', BLSS: 0.803, LFS: 1.788 },
+  ],
+  nonPoor: [
+    { metric: 'Head highest years', BLSS: 5.0, LFS: 5.5 },
+    { metric: 'Max years in HH', BLSS: 10.1, LFS: 10.4 },
+    { metric: 'Avg years in HH', BLSS: 5.1, LFS: 5.4 },
+    { metric: 'Spouse highest years', BLSS: 4.0, LFS: 4.4 },
+  ]
+};
+
+const dataEducationLevel = {
+  metrics: ['No education', 'Primary incomplete', 'Primary complete', 'Secondary incomplete', 'Secondary complete', 'Tertiary'],
+  poor: [
+    { metric: 'No education', BLSS: 0.777, LFS: 0.686 },
+    { metric: 'Primary incomplete', BLSS: 0.113, LFS: 0.104 },
+    { metric: 'Primary complete', BLSS: 0.022, LFS: 0.034 },
+    { metric: 'Secondary incomplete', BLSS: 0.074, LFS: 0.092 },
+    { metric: 'Secondary complete', BLSS: 0.011, LFS: 0.032 },
+    { metric: 'Tertiary', BLSS: 0.004, LFS: 0.021 },
+  ],
+  nonPoor: [
+    { metric: 'No education', BLSS: 0.478, LFS: 0.444 },
+    { metric: 'Primary incomplete', BLSS: 0.107, LFS: 0.106 },
+    { metric: 'Primary complete', BLSS: 0.037, LFS: 0.035 },
+    { metric: 'Secondary incomplete', BLSS: 0.171, LFS: 0.170 },
+    { metric: 'Secondary complete', BLSS: 0.108, LFS: 0.079 },
+    { metric: 'Tertiary', BLSS: 0.098, LFS: 0.137 },
+  ]
+};
+
+const dataWelfare = {
+  metrics: ['HH total labor income', 'Per capita labor income', 'Per capita consumption'],
+  poor: [
+    { metric: 'HH total labor income', BLSS: 13699.0, LFS: 14933.1 },
+    { metric: 'Per capita labor income', BLSS: 2151.8, LFS: 2461.1 },
+    { metric: 'Per capita consumption', BLSS: 5113.0, LFS: 5003.0 },
+  ],
+  nonPoor: [
+    { metric: 'HH total labor income', BLSS: 32161.2, LFS: 33523.1 },
+    { metric: 'Per capita labor income', BLSS: 7584.8, LFS: 7887.8 },
+    { metric: 'Per capita consumption', BLSS: 13896.0, LFS: 15074.1 },
+  ]
+};
+
+const densityData = [
+  { x: 7.2, blss: 0.0001, lfs: 0.0002 }, { x: 7.5, blss: 0.0012, lfs: 0.0018 },
+  { x: 7.8, blss: 0.0080, lfs: 0.0110 }, { x: 8.1, blss: 0.0350, lfs: 0.0420 },
+  { x: 8.4, blss: 0.1100, lfs: 0.1250 }, { x: 8.7, blss: 0.2800, lfs: 0.3100 },
+  { x: 9.0, blss: 0.5200, lfs: 0.5500 }, { x: 9.3, blss: 0.7800, lfs: 0.8100 },
+  { x: 9.6, blss: 0.8900, lfs: 0.8600 }, { x: 9.9, blss: 0.8100, lfs: 0.7400 },
+  { x: 10.2, blss: 0.5600, lfs: 0.5100 }, { x: 10.5, blss: 0.3200, lfs: 0.2900 },
+  { x: 10.8, blss: 0.1400, lfs: 0.1300 }, { x: 11.1, blss: 0.0450, lfs: 0.0520 },
+  { x: 11.4, blss: 0.0120, lfs: 0.0180 }, { x: 11.7, blss: 0.0020, lfs: 0.0040 },
+  { x: 12.0, blss: 0.0002, lfs: 0.0005 },
+];
+
+const ecdfData = [
+  { x: 7.5, blss: 0.001, lfs: 0.002 }, { x: 8.0, blss: 0.015, lfs: 0.020 },
+  { x: 8.5, blss: 0.080, lfs: 0.095 }, { x: 9.0, blss: 0.240, lfs: 0.260 },
+  { x: 9.5, blss: 0.510, lfs: 0.530 }, { x: 10.0, blss: 0.760, lfs: 0.740 },
+  { x: 10.5, blss: 0.910, lfs: 0.890 }, { x: 11.0, blss: 0.975, lfs: 0.970 },
+  { x: 11.5, blss: 0.995, lfs: 0.992 }, { x: 12.0, blss: 1.000, lfs: 1.000 },
+];
+
+const povertyAccuracyData = [
+  { name: '2022 BLSS', estimate: 12.38, low: 11.58, high: 13.17, color: COLORS.primary },
+  { name: '2022 Mahalanobis', estimate: 12.08, low: 11.25, high: 12.91, color: COLORS.mahal },
+  { name: '2022 Mahal Adj', estimate: 11.00, low: 10.18, high: 11.82, color: COLORS.mahal },
+  { name: '2025 Euclidean', estimate: 8.78, low: 8.06, high: 9.50, color: COLORS.euclid },
+  { name: '2025 Euclid Adj', estimate: 14.48, low: 13.59, high: 15.36, color: COLORS.euclid },
+  { name: '2022 Canberra', estimate: 10.66, low: 9.83, high: 11.49, color: COLORS.canberra },
+  { name: '2022 Canberra Adj', estimate: 10.60, low: 9.70, high: 11.40, color: COLORS.canberra },
+];
+
+const inequalityAccuracyData = [
+  { name: '2022 BLSS', estimate: 28.47, low: 27.83, high: 29.11, color: COLORS.primary },
+  { name: '2022 Mahalanobis', estimate: 39.58, low: 36.81, high: 42.36, color: COLORS.mahal },
+  { name: '2022 Mahal Adj', estimate: 29.71, low: 29.15, high: 30.26, color: COLORS.mahal },
+  { name: '2025 Euclidean', estimate: 29.10, low: 28.45, high: 29.75, color: COLORS.euclid },
+  { name: '2025 Euclid Adj', estimate: 38.61, low: 37.74, high: 39.48, color: COLORS.euclid },
+  { name: '2022 Canberra', estimate: 28.92, low: 28.34, high: 29.50, color: COLORS.canberra },
+  { name: '2022 Canberra Adj', estimate: 32.10, low: 31.05, high: 33.15, color: COLORS.canberra },
+];
+
+const quitoPoorData = [
+  { name: '2022', estimate: 12.37, low: 11.58, high: 13.16, color: COLORS.primary },
+  { name: '2022 imputed', estimate: 11.08, low: 10.26, high: 11.91, color: COLORS.imputed },
+  { name: '2023 imputed', estimate: 10.04, low: 8.60, high: 11.48, color: COLORS.imputed },
+  { name: '2024 imputed', estimate: 9.67, low: 8.95, high: 10.39, color: COLORS.imputed },
+  { name: '2025 imputed', estimate: 8.95, low: 8.23, high: 9.66, color: COLORS.imputed },
+];
+
+const quitoGinData = [
+  { name: '2022', estimate: 28.46, low: 27.82, high: 29.10, color: COLORS.primary },
+  { name: '2022 imputed', estimate: 29.70, low: 29.15, high: 30.26, color: COLORS.imputed },
+  { name: '2023 imputed', estimate: 30.24, low: 29.22, high: 31.25, color: COLORS.imputed },
+  { name: '2024 imputed', estimate: 30.45, low: 29.80, high: 31.09, color: COLORS.imputed },
+  { name: '2025 imputed', estimate: 30.39, low: 29.86, high: 30.92, color: COLORS.imputed },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let welfareDataset = 'consumption', welfareGroup = 'quintiles', welfareMetric = 'share';
+let densityTab = 'density', accuracyTab = 'poverty', quitoTab = 'poor', eduTab = 'years';
+let welfareChart, densityChart, accuracyChart, quitoChart;
+let demoCharts = {}, eduCharts = {}, welfareOutCharts = {};
+
+// ============================================================
+// TABS
+// ============================================================
+const tabTitles = {
+  consumption: 'Welfare Distribution', demographics: 'Household Characteristics',
+  education: 'Education Profiles', welfare: 'Welfare Outcomes',
+  density: 'Density / ECDF', accuracy: 'Predictive Accuracy', quito: 'Poverty/Inequality Trends'
+};
+
+document.querySelectorAll('#sidebar-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('#sidebar-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('page-title').textContent = tabTitles[tab];
+    initTab(tab);
+  });
+});
+
+function initTab(tab) {
+  if (tab === 'consumption') renderWelfareChart();
+  if (tab === 'demographics') renderComparison('demo', dataDemographics, v => v.toFixed(2), document.getElementById('demo-content'));
+  if (tab === 'education') renderEduTab();
+  if (tab === 'welfare') renderComparison('welout', dataWelfare, v => v.toLocaleString(undefined, {maximumFractionDigits:0}), document.getElementById('welfare-content'));
+  if (tab === 'density') renderDensityChart();
+  if (tab === 'accuracy') renderAccuracyChart();
+  if (tab === 'quito') renderQuitoChart();
+}
+
+// ============================================================
+// WELFARE DISTRIBUTION
+// ============================================================
+function renderWelfareChart() {
+  const rows = dataDistributions[welfareDataset][welfareGroup];
+  const labels = rows.map(r => r.category);
+  const blssVals = rows.map(r => welfareMetric === 'share' ? r.share_BLSS : r.pc_BLSS);
+  const lfsVals = rows.map(r => welfareMetric === 'share' ? r.share_LFS : r.pc_LFS);
+  const fmt = welfareMetric === 'share' ? v => (v*100).toFixed(2)+'%' : v => v.toLocaleString();
+
+  if (welfareChart) welfareChart.destroy();
+  welfareChart = new Chart(document.getElementById('welfareChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'BLSS 2022', data: blssVals, backgroundColor: COLORS.primary, borderWidth: 0 },
+        { label: 'LFS 2022 (Imputed)', data: lfsVals, backgroundColor: COLORS.secondary, borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11, weight: 700 } } },
+        y: { grid: { color: '#F1F3F5' }, ticks: { callback: welfareMetric === 'share' ? v => (v*100).toFixed(0)+'%' : v => v.toLocaleString(), font: { size: 10 } }, border: { display: false } }
+      }
+    }
+  });
+}
+
+// ctrl buttons
+['dataset-btns','group-btns','metric-btns'].forEach(id => {
+  document.getElementById(id).querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'dataset-btns') welfareDataset = btn.dataset.val;
+      if (id === 'group-btns') welfareGroup = btn.dataset.val;
+      if (id === 'metric-btns') welfareMetric = btn.dataset.val;
+      renderWelfareChart();
+    });
+  });
+});
+
+// ============================================================
+// COMPARISON VIEW (Demographics, Welfare, Education)
+// ============================================================
+function renderComparison(prefix, data, formatFn, container) {
+  if (!container) return;
+  const selectedMetrics = new Set(data.metrics);
+  let chartType = 'bar';
+  let povertyView = 'both';
+  let poorChart, nonPoorChart;
+
+  function html() {
+    return `
+      <div style="display:flex;justify-content:flex-end;gap:1rem;margin-bottom:1rem;align-items:center;">
+        <div class="view-toggle">
+          <button id="${prefix}-bar" class="${chartType==='bar'?'active':''}" onclick="window['${prefix}_setChart']('bar')">Bar</button>
+          <button id="${prefix}-spider" class="${chartType==='spider'?'active':''}" onclick="window['${prefix}_setChart']('spider')">Radar</button>
+        </div>
+        <select class="view-select" id="${prefix}-pov-sel" onchange="window['${prefix}_setPov'](this.value)">
+          <option value="both" ${povertyView==='both'?'selected':''}>Poor & Non-Poor</option>
+          <option value="poor" ${povertyView==='poor'?'selected':''}>Poor</option>
+          <option value="nonPoor" ${povertyView==='nonPoor'?'selected':''}>Non-Poor</option>
+        </select>
+      </div>
+      <div class="metric-pills" id="${prefix}-pills">
+        ${data.metrics.map(m => `<button class="metric-pill ${selectedMetrics.has(m)?'active':''}" onclick="window['${prefix}_toggleMetric']('${m}')">${m}</button>`).join('')}
+      </div>
+      <div class="chart-card">
+        <div class="${povertyView==='both'?'charts-grid':'charts-grid single'}">
+          ${povertyView !== 'nonPoor' ? `<div><div class="chart-sub-label">POOR</div><div class="chart-wrap"><canvas id="${prefix}-poor-chart" height="280"></canvas></div></div>` : ''}
+          ${povertyView !== 'poor' ? `<div><div class="chart-sub-label">NON-POOR</div><div class="chart-wrap"><canvas id="${prefix}-nonpoor-chart" height="280"></canvas></div></div>` : ''}
+        </div>
+        <div class="legend" style="margin-top:1rem;">
+          <div class="legend-item"><div class="legend-dot" style="background:#002B49"></div>BLSS 2022</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#708090"></div>LFS 2022 (Imputed)</div>
+        </div>
+      </div>
+      <div style="overflow:auto;margin-bottom:2rem;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Indicator</th>
+              <th class="sep" colspan="2" style="text-align:center;">Poor</th>
+              <th class="sep" colspan="2" style="text-align:center;">Non-Poor</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th class="sep" style="text-align:center;font-size:.55rem;">BLSS 2022</th>
+              <th style="text-align:center;font-size:.55rem;">LFS 2022</th>
+              <th class="sep" style="text-align:center;font-size:.55rem;">BLSS 2022</th>
+              <th style="text-align:center;font-size:.55rem;">LFS 2022</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.metrics.filter(m=>selectedMetrics.has(m)).map(metric=>{
+              const p=data.poor.find(d=>d.metric===metric)||{BLSS:0,LFS:0};
+              const np=data.nonPoor.find(d=>d.metric===metric)||{BLSS:0,LFS:0};
+              return `<tr>
+                <td class="label">${metric}</td>
+                <td class="mono sep" style="text-align:center;">${formatFn(p.BLSS)}</td>
+                <td class="mono" style="text-align:center;">${formatFn(p.LFS)}</td>
+                <td class="mono sep" style="text-align:center;">${formatFn(np.BLSS)}</td>
+                <td class="mono" style="text-align:center;">${formatFn(np.LFS)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderCharts() {
+    const metrics = data.metrics.filter(m => selectedMetrics.has(m));
+    if (poorChart) poorChart.destroy();
+    if (nonPoorChart) nonPoorChart.destroy();
+    const type = chartType === 'bar' ? 'bar' : 'radar';
+
+    if (povertyView !== 'nonPoor') {
+      const el = document.getElementById(`${prefix}-poor-chart`);
+      if (el) {
+        const poorDataBLSS = metrics.map(m => (data.poor.find(d=>d.metric===m)||{BLSS:0}).BLSS);
+        const poorDataLFS = metrics.map(m => (data.poor.find(d=>d.metric===m)||{LFS:0}).LFS);
+        poorChart = buildCompChart(el, type, metrics, poorDataBLSS, poorDataLFS);
+      }
+    }
+    if (povertyView !== 'poor') {
+      const el = document.getElementById(`${prefix}-nonpoor-chart`);
+      if (el) {
+        const npDataBLSS = metrics.map(m => (data.nonPoor.find(d=>d.metric===m)||{BLSS:0}).BLSS);
+        const npDataLFS = metrics.map(m => (data.nonPoor.find(d=>d.metric===m)||{LFS:0}).LFS);
+        nonPoorChart = buildCompChart(el, type, metrics, npDataBLSS, npDataLFS);
+      }
+    }
+  }
+
+  function buildCompChart(el, type, labels, blss, lfs) {
+    const isRadar = type === 'radar';
+    return new Chart(el, {
+      type,
+      data: {
+        labels,
+        datasets: [
+          { label: 'BLSS 2022', data: blss, backgroundColor: isRadar ? 'rgba(0,43,73,0.08)' : COLORS.primary, borderColor: COLORS.primary, borderWidth: isRadar ? 2 : 0, pointBackgroundColor: COLORS.primary },
+          { label: 'LFS 2022 (Imputed)', data: lfs, backgroundColor: isRadar ? 'rgba(112,128,144,0.08)' : COLORS.secondary, borderColor: COLORS.secondary, borderWidth: isRadar ? 2 : 0, pointBackgroundColor: COLORS.secondary }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatFn(ctx.raw) } } },
+        scales: isRadar ? {} : {
+          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 30 } },
+          y: { grid: { color: '#F1F3F5' }, ticks: { callback: v => formatFn(v), font: { size: 9 } }, border: { display: false } }
+        }
+      }
+    });
+  }
+
+  window[`${prefix}_toggleMetric`] = (m) => {
+    if (selectedMetrics.has(m)) { if (selectedMetrics.size > 1) selectedMetrics.delete(m); }
+    else selectedMetrics.add(m);
+    container.innerHTML = html(); renderCharts();
+  };
+  window[`${prefix}_setChart`] = (t) => { chartType = t; container.innerHTML = html(); renderCharts(); };
+  window[`${prefix}_setPov`] = (v) => { povertyView = v; container.innerHTML = html(); renderCharts(); };
+
+  container.innerHTML = html();
+  renderCharts();
+}
+
+// ============================================================
+// EDUCATION
+// ============================================================
+function renderEduTab() {
+  const container = document.getElementById('edu-content');
+  const data = eduTab === 'years' ? dataEducationYears : dataEducationLevel;
+  const fmt = eduTab === 'years' ? v => v.toFixed(2) : v => (v*100).toFixed(1)+'%';
+  renderComparison('edu_' + eduTab, data, fmt, container);
+}
+
+function setEduTab(tab) {
+  eduTab = tab;
+  document.getElementById('edu-years-btn').classList.toggle('active', tab === 'years');
+  document.getElementById('edu-level-btn').classList.toggle('active', tab === 'level');
+  renderEduTab();
+}
+
+// ============================================================
+// DENSITY / ECDF
+// ============================================================
+function renderDensityChart() {
+  const isEcdf = densityTab === 'ecdf';
+  const src = isEcdf ? ecdfData : densityData;
+  const blssData = src.map(d => ({x: d.x, y: d.blss}));
+  const lfsData = src.map(d => ({x: d.x, y: d.lfs}));
+
+  if (densityChart) densityChart.destroy();
+  densityChart = new Chart(document.getElementById('densityChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'BLSS 2022', data: blssData, borderColor: COLORS.primary, borderWidth: 2.5, pointRadius: 0, tension: 0.4, fill: false },
+        { label: 'LFS 2022 (Imputed)', data: lfsData, borderColor: COLORS.secondary, borderWidth: 2.5, pointRadius: 0, tension: 0.4, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Log of Consumption', color: '#94a3b8', font: { size: 11, weight: 600 } }, grid: { color: '#F1F3F5' }, ticks: { font: { size: 10 } }, border: { display: false } },
+        y: { title: { display: true, text: isEcdf ? 'Cumulative Share' : 'Density', color: '#94a3b8', font: { size: 11, weight: 600 } }, grid: { color: '#F1F3F5' }, ticks: { callback: isEcdf ? v => (v*100).toFixed(0)+'%' : null, font: { size: 10 } }, border: { display: false } }
+      }
+    }
+  });
+}
+
+function setDensityTab(tab) {
+  densityTab = tab;
+  document.getElementById('density-btn').classList.toggle('active', tab === 'density');
+  document.getElementById('ecdf-btn').classList.toggle('active', tab === 'ecdf');
+  renderDensityChart();
+}
+
+// ============================================================
+// ACCURACY CHART (scatter + error bars via custom plugin)
+// ============================================================
+function renderAccuracyChart() {
+  const data = accuracyTab === 'poverty' ? povertyAccuracyData : inequalityAccuracyData;
+  const isPov = accuracyTab === 'poverty';
+  const fmt = v => isPov ? v.toFixed(2)+'%' : v.toFixed(2);
+
+  if (accuracyChart) accuracyChart.destroy();
+
+  const errorBarPlugin = {
+    id: 'errorBar',
+    afterDatasetsDraw(chart) {
+      const {ctx} = chart;
+      chart.data.datasets[0].data.forEach((pt, i) => {
+        const meta = chart.getDatasetMeta(0);
+        const el = meta.data[i];
+        if (!el) return;
+        const entry = data[i];
+        if (!entry) return;
+        const yLow = chart.scales.y.getPixelForValue(entry.low);
+        const yHigh = chart.scales.y.getPixelForValue(entry.high);
+        const x = el.x;
+        ctx.save();
+        ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, yLow); ctx.lineTo(x, yHigh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yLow); ctx.lineTo(x+5, yLow); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yHigh); ctx.lineTo(x+5, yHigh); ctx.stroke();
+        ctx.restore();
+      });
+    }
+  };
+
+  accuracyChart = new Chart(document.getElementById('accuracyChart'), {
+    type: 'scatter',
+    plugins: [errorBarPlugin],
+    data: {
+      datasets: [{
+        label: 'Estimate',
+        data: data.map((d,i) => ({x: i, y: d.estimate})),
+        backgroundColor: data.map(d => d.color),
+        pointRadius: 7, pointHoverRadius: 9,
+        borderColor: 'white', borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => {
+            const d = data[ctx.dataIndex];
+            return [`Estimate: ${fmt(d.estimate)}`, `CI: ${fmt(d.low)} – ${fmt(d.high)}`];
+          },
+          title: ctx => data[ctx[0].dataIndex].name
+        }}
+      },
+      scales: {
+        x: {
+          type: 'linear', min: -0.5, max: data.length - 0.5,
+          ticks: {
+            callback: (v) => {
+              const d = data[Math.round(v)];
+              return d ? d.name : '';
+            },
+            stepSize: 1, maxRotation: 30, font: { size: 9, weight: 700 }
+          },
+          grid: { display: false }
+        },
+        y: {
+          min: isPov ? 7 : 20, max: isPov ? 16 : 45,
+          grid: { color: '#F1F3F5' },
+          title: { display: true, text: isPov ? 'Poverty rate (%)' : 'Gini Coefficient', color: '#94a3b8', font: { size: 11, weight: 600 } },
+          ticks: { font: { size: 10 } }, border: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function setAccuracyTab(tab) {
+  accuracyTab = tab;
+  document.getElementById('acc-poverty-btn').classList.toggle('active', tab === 'poverty');
+  document.getElementById('acc-gini-btn').classList.toggle('active', tab === 'inequality');
+  renderAccuracyChart();
+}
+
+// ============================================================
+// QUITO TRENDS
+// ============================================================
+function renderQuitoChart() {
+  const data = quitoTab === 'poor' ? quitoPoorData : quitoGinData;
+  const isPov = quitoTab === 'poor';
+  const fmt = v => isPov ? v.toFixed(2)+'%' : v.toFixed(2);
+
+  const errorBarPlugin = {
+    id: 'quitoEB',
+    afterDatasetsDraw(chart) {
+      const {ctx} = chart;
+      chart.data.datasets[0].data.forEach((pt, i) => {
+        const meta = chart.getDatasetMeta(0);
+        const el = meta.data[i];
+        if (!el) return;
+        const entry = data[i];
+        const yLow = chart.scales.y.getPixelForValue(entry.low);
+        const yHigh = chart.scales.y.getPixelForValue(entry.high);
+        const x = el.x;
+        ctx.save();
+        ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, yLow); ctx.lineTo(x, yHigh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yLow); ctx.lineTo(x+5, yLow); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x-5, yHigh); ctx.lineTo(x+5, yHigh); ctx.stroke();
+        ctx.restore();
+      });
+    }
+  };
+
+  if (quitoChart) quitoChart.destroy();
+  quitoChart = new Chart(document.getElementById('quitoChart'), {
+    type: 'scatter',
+    plugins: [errorBarPlugin],
+    data: {
+      datasets: [{
+        data: data.map((d, i) => ({x: i, y: d.estimate})),
+        backgroundColor: data.map(d => d.color),
+        pointRadius: 7, pointHoverRadius: 9,
+        borderColor: 'white', borderWidth: 2
+      },{
+        // trend line (imputed only)
+        type: 'line',
+        data: data.map((d, i) => i === 0 ? null : {x: i, y: d.estimate}),
+        borderColor: COLORS.imputed, borderWidth: 2, borderDash: [5,5],
+        pointRadius: 0, fill: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => {
+            if (ctx.datasetIndex !== 0) return null;
+            const d = data[ctx.dataIndex];
+            return [`Estimate: ${fmt(d.estimate)}`, `CI: ${fmt(d.low)} – ${fmt(d.high)}`];
+          },
+          title: ctx => {
+            if (ctx[0].datasetIndex !== 0) return null;
+            return data[ctx[0].dataIndex].name;
+          }
+        }}
+      },
+      scales: {
+        x: {
+          type: 'linear', min: -0.5, max: data.length - 0.5,
+          ticks: { callback: v => { const d = data[Math.round(v)]; return d ? d.name : ''; }, stepSize: 1, maxRotation: 20, font: { size: 9, weight: 700 } },
+          grid: { display: false }
+        },
+        y: {
+          min: isPov ? 7 : 25, max: isPov ? 15 : 33,
+          grid: { color: '#F1F3F5' },
+          title: { display: true, text: isPov ? 'Poverty rate (%)' : 'Gini Coefficient', color: '#94a3b8', font: { size: 11, weight: 600 } },
+          ticks: { font: { size: 10 } }, border: { display: false }
+        }
+      }
+    }
+  });
+
+  // Table
+  const t = document.getElementById('quito-table');
+  t.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Series</th><th>Estimate</th><th>CI (Lower)</th><th>CI (Upper)</th>
+    </tr></thead>
+    <tbody>
+      ${data.map(row => `<tr>
+        <td class="label">${row.name}</td>
+        <td class="mono">${fmt(row.estimate)}</td>
+        <td class="mono">${fmt(row.low)}</td>
+        <td class="mono">${fmt(row.high)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function setQuitoTab(tab) {
+  quitoTab = tab;
+  document.getElementById('quito-poor-btn').classList.toggle('active', tab === 'poor');
+  document.getElementById('quito-gini-btn').classList.toggle('active', tab === 'gini');
+  renderQuitoChart();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderWelfareChart();
+</script>
+</body>
+</html>
